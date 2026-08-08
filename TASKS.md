@@ -105,19 +105,19 @@ they flip G1.
 
 | ID | Task | State |
 |---|---|---|
-| T-15 | `provider.ts` — credential order: header → env → template | ⬜ |
-| T-16 | `template.ts` — **must work with zero credentials**; test hardest | ⬜ |
-| T-17 | `anthropic.ts` — structured output, validate schema and re-check the sum | ⬜ |
+| T-15 | `provider.ts` — credential order: header → env → template | ✅ |
+| T-16 | `template.ts` — **must work with zero credentials**; test hardest | ✅ |
+| T-17 | `anthropic.ts` — structured output, validate schema and re-check the sum | ✅ |
 
 **Wave 4 — frontend.** Build against local anvil; Alfa swaps the address at A-5.
 
 | ID | Task | State |
 |---|---|---|
-| T-18 | Scaffold Next.js 16 + wagmi v3 + Tailwind; bump tsconfig target to ES2020 | 🔄 |
-| T-19 | `useTxFlow` — simulate → estimate → show cost → explicit click → send with gas limit | ⬜ |
-| T-20 | `/` my jobs from `escrowsOf(me)`, client and freelancer tabs | ⬜ |
-| T-21 | `/new` brief → draft → edit amounts and criteria → fund and create | ⬜ |
-| T-22 | `/job/[address]` — four viewer roles, milestone cards, live countdown | ⬜ |
+| T-18 | Scaffold Next.js 16 + wagmi v3 + Tailwind; bump tsconfig target to ES2020 | ✅ |
+| T-19 | `useTxFlow` — simulate → estimate → show cost → explicit click → send with gas limit | ✅ |
+| T-20 | `/` my jobs from `escrowsOf(me)`, client and freelancer tabs | ✅ |
+| T-21 | `/new` brief → draft → edit amounts and criteria → fund and create | ✅ |
+| T-22 | `/job/[address]` — four viewer roles, milestone cards, live countdown | ✅ |
 
 ## S — Studio (ChatGPT)
 
