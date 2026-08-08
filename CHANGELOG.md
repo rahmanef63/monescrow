@@ -1985,3 +1985,80 @@ score is now a shared number: mine alone is 70/211 `text-xs`, and `/demo` moves 
 Evidence: `npx vitest run` → 743 passed, 23 files · `npx tsc --noEmit` → exit 0 with `.next` deleted · `npx next build` clean · design lint 7/7 · guard reverted → 7 of 16 key-routing assertions red, restored → 16/16 · `grep -rn "api/verify" web/src` returns only `app/demo/page.tsx`
 Blocks: nothing of A's. G2 is unaffected. The submit/verify/attest gap blocks a judge performing the happy path in the app rather than watching it.
 Files: web/src/** (type classes, the key-routing guard), web/src/lib/architecture.test.ts, web/src/app/api/chat/key-routing.test.ts, web/CONVEX.md
+
+## 2026-08-08T09:43Z · T · HANDOFF
+**The centre of the product now has a UI, and Taskforce is done. Over to A to test it.**
+`submit → run the check → relay the attestation → the window opens` can be performed in the
+app for the first time. 752 tests, tsc clean with no `.next`, `next build` clean, design lint
+7/7.
+
+**What was actually wrong.** `MilestoneCard` hands `submit` and `attest` off through `onAction`
+because it cannot build either call itself — one needs an evidence hash it does not collect,
+the other a verifier signature the page does not hold. The card was written correctly and
+**nothing had ever taken the hand-off**, so both rendered permanently disabled with copy
+pointing at the assistant, whose card pointed back at the job page. The fix needed no change to
+`MilestoneCard` at all: the job page now passes `onAction` and renders `WorkPanel`.
+
+    web/src/components/WorkPanel.tsx   the three steps, with its own state
+    web/src/lib/documents.ts           where the C3/C4/C5 preimages live until Convex exists
+
+**The document store is deliberately small and deliberately honest.** Content-addressed —
+keyed by the document's own hash, so "store a different criteria for milestone 2" is
+inexpressible rather than merely discouraged. `get` re-hashes before returning and refuses a
+mismatch, so a consumer cannot forget the check. It is `localStorage`, which means the client
+who created a job has the criteria and the freelancer opening the link does not; the panel says
+that in words and offers a paste box, which is safe precisely because the hash decides whether
+a paste is accepted. It is written to the shape `web/CONVEX.md` plans, so the Convex adapter
+replaces two functions.
+
+**The fitness test caught my own change, which is the point of having it.** Adding the check
+button put a `fetch('/api/verify')` on the job page and `architecture.test.ts` went red. I
+checked it against C8's actual rule rather than just widening the test: pause the backend, and
+does every job still list and every milestone still release? Yes — the fetch is inside a click
+handler, nothing renders or releases through it, and its failure surfaces as "we could not
+reach it". So the rule was too broad, not the code wrong. `/api/verify` and `/api/chat` are now
+allowed **by name**, with a comment saying that adding a route to that list means arguing it
+survives the pause test. Verified the narrowed rule still bites: a `fetch('/api/documents')` on
+the job page turns it red.
+
+---
+
+## A — what to test, in the order it breaks
+
+Everything below is on `main` at the tip. `NEXT_PUBLIC_FACTORY_ADDRESS` is still empty, so
+`/job/<address>` falls back to the labelled sample and every send is disabled — **the first
+three items need a real escrow, so they are gated on G2.**
+
+  1. **Submit.** As the freelancer on a Pending or Submitted milestone, press *Submit work*.
+     Fill one field. The panel shows the evidence hash before you send. Check the hash in the
+     transaction matches the one displayed, and that `submissions` increments on chain.
+  2. **Run the check.** As anyone, on a Submitted milestone. It needs the criteria, which only
+     the creating browser has — so the interesting case is **opening the link in a second
+     browser** and confirming you get the paste box with an explanation rather than a broken
+     panel. Paste the criteria JSON; a wrong paste must be rejected against the hash.
+  3. **Relay.** On a pass, *Relay the attestation* sends `attest` with the returned signature.
+     **Do this from a third wallet that is neither party** — that is the property the pitch
+     leans on hardest and nothing had ever exercised it. The milestone should move to Attested
+     and the countdown should start.
+  4. **The adversarial demo end to end.** Your `/demo` page and this flow now do the same thing
+     by different routes. Point a milestone's criteria at `/demo/blank`, run the check, watch it
+     **pass**, then dispute inside the window and confirm the money stays put. If those two
+     paths ever disagree, one of them is lying.
+  5. **The C8 pause test, for real.** There is no Convex deployment yet, so the closest
+     available check is: with `/api/verify` returning 502 (unset `VERIFIER_PRIVATE_KEY`), the
+     job list must still render, every milestone must still show its state, and release,
+     approve, dispute, reclaim and withdraw must all still work. Only the check button degrades.
+
+**Still open on my side, and small:** `/api/ai/milestones` is Anthropic-only (T-27); the chat
+is provider-agnostic. Six P1s reported at 09:22Z and not fixed — no timeout on the chat
+transport or the GitHub checks, and `escrowsOf` is an unbounded read that will get slow well
+before it gets wrong.
+
+**Still yours:** the eight audit blockers from 08:34Z. The two that bite on deploy day have not
+moved — `make repro` prints the sha256 of an empty stream when `jq` is absent, and RUNBOOK's
+init-code hash is `15,787 B / 0xfa55d0d3…` when the real one is **15,948 B**, so step 3 tells
+the signer to refuse a correct deployment.
+
+Evidence: `npx vitest run` → 752 passed, 25 files · `npx tsc --noEmit` → exit 0 with `.next` deleted · `npx next build` clean · design lint 7/7 · architecture test proven to still bite via a `fetch('/api/documents')` on the job page
+Unblocks: A can perform the happy path in the product rather than in a scripted page, once G2 lands
+Files: web/src/components/WorkPanel.tsx, web/src/lib/documents.ts, web/src/lib/documents.test.ts, web/src/app/job/[address]/page.tsx, web/src/lib/architecture.test.ts, TASKS.md

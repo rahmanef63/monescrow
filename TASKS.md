@@ -138,8 +138,10 @@ the pattern in `models-rahmanef-com` (a multi-tenant BYOK model registry).
 | T-24 | `models/resolve.ts` — `parseRef` + `resolveModel`, **host-gated** so a key can never be sent to another provider | ✅ |
 | T-25 | `models/store.ts` — `CredentialStore` seam: per-request header → env → none | ✅ |
 | T-26 | `models/call.ts` — both wire protocols (`openai` chat/completions, `anthropic` messages) **including tool calling** | ✅ |
-| T-27 | `/api/chat` wired onto it via `x-llm-model` ✅ · `/api/ai/milestones` and the picker still Anthropic-only | 🔄 |
+| T-27 | `/api/chat` wired via `x-llm-model` ✅ · `/api/ai/milestones` still Anthropic-only | 🔄 |
 | T-28 | ~~Assistant button did nothing — `ChatSheet` was never mounted~~ | ✅ |
+| T-29 | Evidence form, **Run the check**, and attestation relay — the three steps that had no UI | ✅ |
+| T-30 | `lib/documents.ts` — content-addressed local store for the C3/C4/C5 preimages, hash-checked on read | ✅ |
 
 ## S — Studio (ChatGPT)
 

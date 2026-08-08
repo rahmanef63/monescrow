@@ -275,6 +275,25 @@ function convexReason(spec: string, importer: string): string | null {
 const CONVEX_ENV = /NEXT_PUBLIC_CONVEX[A-Z_]*/
 
 /**
+ * Routes a user *presses a button to invoke*, which are not data sources.
+ *
+ * The rule this file enforces is C8's: **listing and releasing must not depend on a server of
+ * ours.** The honest test of that is the one C8 states — pause the backend, and every job must
+ * still list and every milestone must still be releasable. A fetch inside a click handler for
+ * an action the user chose does not affect either: the page renders without it, the button
+ * still sends, and the failure surfaces as "we could not reach it, try again".
+ *
+ * So these two are allowed by name rather than by pattern, and the list is short on purpose.
+ * **Adding a route here means arguing it survives the pause test** — if a screen cannot render
+ * or a milestone cannot release without it, it does not belong on this list, it belongs off
+ * this path.
+ *
+ *   /api/verify  runs the check the user asked for, then hands back a signature to relay
+ *   /api/chat    the assistant, which is optional everywhere and degrades to "unavailable"
+ */
+const ACTION_ROUTES = ['/api/verify', '/api/chat']
+
+/**
  * `fetch()` calls that would mean the data came from a server of ours.
  *
  * `.refetch()` and friends are member calls and are not this; the lookbehind keeps them out.
@@ -287,7 +306,10 @@ function backendFetches(code: string): string[] {
     if (!literal) {
       hits.push(`fetch(${arg || '…'}) — computed URL; this test cannot prove it is not a store`)
     } else if (/^['"`]\/api\//.test(arg)) {
-      hits.push(`fetch(${arg}…) — an app API route`)
+      const route = arg.slice(1)
+      if (!ACTION_ROUTES.some((allowed) => route.startsWith(allowed))) {
+        hits.push(`fetch(${arg}…) — an app API route`)
+      }
     } else if (/convex/i.test(arg)) {
       hits.push(`fetch(${arg}…) — a Convex endpoint`)
     }

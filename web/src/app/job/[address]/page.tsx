@@ -39,7 +39,7 @@
  * like when the off-chain store is wired up.
  */
 
-import { use, useCallback, useMemo } from 'react'
+import { use, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useConnection, useReadContracts } from 'wagmi'
 import { escrowAbi } from '@/lib/abis'
@@ -48,6 +48,7 @@ import { permits, roleOf } from '@/lib/chat/permissions'
 import { MSTATE, type ActionContext, type ChainAction, type MState, type Role } from '@/lib/chat/types'
 import type { CheckKind, Criteria, Evidence, Report } from '@/lib/verify/types'
 import type { TxRequest } from '@/lib/useTxFlow'
+import { WorkPanel } from '@/components/WorkPanel'
 import { MilestoneCard } from '@/components/MilestoneCard'
 import { Countdown, formatAbsolute, useNow } from '@/components/Countdown'
 import { TxButton } from '@/components/TxButton'
@@ -678,6 +679,16 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
     void refetchReads()
   }, [refetchReads])
 
+  /**
+   * Which milestone has the submit/check flow open.
+   *
+   * `MilestoneCard` cannot build the `submit` or `attest` call itself — one needs an evidence
+   * hash the card does not collect, the other a verifier signature the page does not hold — so
+   * it hands both off through `onAction`. Nothing had ever taken the hand-off, which is why
+   * both buttons were permanently disabled and pointed at an assistant that pointed back here.
+   */
+  const [work, setWork] = useState<{ action: 'submit' | 'attest'; index: number } | null>(null)
+
   const live = useMemo((): JobData | null => {
     const data = reads.data
     if (!valid || !data) return null
@@ -985,7 +996,20 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
                     report={m.report}
                     sample={isSample}
                     onChanged={refetch}
+                    onAction={isSample ? undefined : (a, idx) => setWork({ action: a as 'submit' | 'attest', index: idx })}
                   />
+                  {work && work.index === i ? (
+                    <WorkPanel
+                      escrow={job.escrow}
+                      action={work.action}
+                      index={i}
+                      submissions={m.submissions}
+                      criteriaHash={m.criteriaHash}
+                      evidenceHash={m.evidenceHash}
+                      onClose={() => setWork(null)}
+                      onChanged={refetch}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
