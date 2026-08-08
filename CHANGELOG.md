@@ -1383,3 +1383,45 @@ Deployed and verified against the served HTML, not the local file.
 Evidence: `f2a28fd` pushed; `curl https://monescrow.vercel.app/` returns the new table incl. "In-app assistant" and "not yet the page you are reading" · vercel.json schema fetched from openapi.vercel.sh, 40 properties, no `rootDirectory` · no `package.json` at the repo root
 Unblocks: the app ships the moment Root Directory is flipped; nothing else is in the way
 Files: site/index.html, web/vercel.json, deploy/VERCEL.md (yours, committed for you)
+
+## 2026-08-08T08:04Z · A · DECIDE
+**D-1 and D-2 resolved from onchain evidence, and A-2 is now staged rather than blocked.**
+The human supplied a funded wallet: 54.5 MON, faucet transfer `0xa6051243…` confirmed on
+Monadscan. Checked what it actually is rather than assuming — it is an **EOA**, not a Safe,
+and its history shows `execTransaction` calls against `0x7D9f9957…51e174123`, the disposable
+MonFund Safe. So it is a personal key the human holds, which is exactly what D-1 needed.
+
+**That address does not appear in any committed file and will not.** It lives in
+`deploy/keys/owners.local.json`, gitignored. Contract and Safe addresses are necessary and
+fine to publish; a personal EOA permanently ties a GitHub identity to onchain history, and EVM
+addresses are identical on testnet and mainnet. Verified with `git grep` that no tracked file
+contains it.
+
+**D-2** follows the earlier decision: the arbiter is the same EOA, so A-7 can resolve a dispute
+both ways with a single signature instead of a 2-of-2 round trip mid-demo.
+
+Generated the deployer agent wallet — `0x5e6F6C87604373d80A7688788C18A7e5AABeD7eA`, currently
+unfunded, keystore in `deploy/keys/deployer/` (gitignored). It exists only to pay gas for the
+Safe proxy deployment and to sign proposals.
+
+**The important part is where the keystore lives.** Both owner keys are now files in the
+project folder rather than in a sandbox that evaporates between sessions. That is the whole
+fix for what froze the previous Safe: its second owner was an ephemeral agent key, so a 2-of-2
+threshold left it unable to execute anything at all — including an owner change to rescue
+itself. A Safe is only as durable as its least durable key.
+
+Wrote `deploy/RUNBOOK.md`: eight ordered steps, each labelled with who runs it, because Alfa
+cannot sign or reach the chain, Taskforce owns `web/`, and only the human can hold a personal
+key. It carries the two traps that cost time if met first on deploy day — the receipt's
+`contractAddress` is always `null` for a Safe deployment, and the `ContractCreation` log is
+emitted from the Safe's own address rather than `CreateCall`'s, so filtering by `CreateCall`
+finds nothing.
+
+**Lane boundaries restated in the runbook, deliberately.** Taskforce has since taken over
+`vercel.json` and `web/vercel.json` — the root file is back to serving `site/` and the web one
+now carries PWA and service-worker headers, which is a coherent arrangement with Root Directory
+set to `web`. Alfa is not touching either again. The only thing Alfa will edit near `web/` is
+`web/.env.local`, which is gitignored, when the factory address exists at step 8.
+Evidence: Monadscan tx `0xa6051243…` → 50 MON transfer, Success, block 51855065 · address page shows an EOA with `execTransaction` history against `0x7D9f9957…` · `git grep` finds the EOA in no tracked file · `git check-ignore` confirms `deploy/keys/**` ignored
+Unblocks: A-2 → A-3 → A-4 → G2, once the deployer is funded and the Safe is deployed
+Files: deploy/RUNBOOK.md, deploy/keys/** (ignored)

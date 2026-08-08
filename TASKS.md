@@ -33,7 +33,7 @@ parallel is listed below as unblocked.
 |---|---|---|---|
 | A-0 | Freeze interfaces C1–C10, write escrow contracts, attestation security suite | ✅ done | — |
 | A-1 | Generate verifier keypair; publish address only as `NEXT_PUBLIC_VERIFIER_ADDRESS` | ✅ done | — |
-| A-2 | Deploy a fresh 2-of-2 Safe with two keys the human controls | ⬜ | **D-1 — waiting on one address** |
+| A-2 | Deploy a fresh 2-of-2 Safe with two keys the human controls | 🟡 staged — deployer agent generated, both keystores on disk; **needs funding + one broadcast** | human |
 | A-3 | Deploy `EscrowFactory` via monskills `propose.sh` | ⬜ | G1, A-2 |
 | A-4 | Verify Factory + one Escrow on all explorers | ⬜ | A-3 |
 | A-5 | Swap real address into `web/.env.local`, confirm the list loads | ⬜ | A-4, T-15 |
@@ -63,10 +63,19 @@ parallel is listed below as unblocked.
 `ChallengeWindowOutOfRange(0, 60, 2592000)`), then commit and push everything unpushed. See
 the 06:25Z `HANDOFF`. Delete `.git/index.lock` and the `node_modules` symlink first.
 
-**Waiting on exactly one thing.** Every A task that does not touch the live chain is done.
-A-2 → A-3 → A-4 → A-5 → A-6 → A-7 → A-8 → A-11 → G2/G3/G4 all sit behind **D-1: one address**.
-The deploy script, the Safe relay, the verifier key, the demo parameters and the docs are
-staged and tested; the chain work starts the minute that address exists and G1 goes green.
+| A-27 | `deploy/RUNBOOK.md` — eight ordered steps, labelled by who runs each | ✅ done | — |
+| A-28 | Deployer agent wallet, keystore on disk not in a sandbox | ✅ done — unfunded | — |
+
+**G1 is green and D-1/D-2 are resolved, so the only thing left is two commands nobody but a
+human can run:** fund `0x5e6F6C87604373d80A7688788C18A7e5AABeD7eA` with ~2 MON, then broadcast
+the Safe deployment (`deploy/RUNBOOK.md` steps 1–2). Everything downstream — propose, sign,
+read the `ContractCreation` log, verify on both explorers, repro-hash, wire the address into
+the app — is staged and rehearsed. Alfa cannot sign and cannot reach the chain; that is the
+whole reason those two steps are yours.
+
+**Lane note for T:** Alfa is not touching `vercel.json`, `web/vercel.json` or `web/**` again.
+The one exception is `web/.env.local` (gitignored) at runbook step 8, when the factory address
+exists.
 
 **A's gate note.** `forge fmt --check` is clean across the tree and `forge build --sizes` is
 under limit, so **every G1 condition that depends on an A-owned file is satisfied**. G1 now
@@ -142,8 +151,8 @@ Things nobody should silently assume. Raise in `CHANGELOG.md` as a `DECIDE` entr
 
 | # | Question | Owner | Status |
 |---|---|---|---|
-| D-1 | Second human wallet for the 2-of-2 Safe — which address? | human | ⬜ **open — paste one address and A-2→A-3→G2 all unblock** |
-| D-2 | Arbiter address for the demo escrows | human | 🟡 decided: same EOA as the second Safe owner — needs D-1's address |
+| D-1 | Second human wallet for the 2-of-2 Safe — which address? | human | ✅ **resolved** — funded EOA supplied, held in gitignored `deploy/keys/owners.local.json` |
+| D-2 | Arbiter address for the demo escrows | human | ✅ **resolved** — same EOA, single signature keeps A-7 fast on camera |
 | D-3 | Default challenge window for the demo (short enough to show live) | A | ✅ **resolved** — product default 3 d, demo preset 90 s; see `deploy/DEMO-PARAMS.md` |
 | D-4 | Is a hosted deployment in scope, or clean-clone instructions only? | human | ✅ **reversed 05:58Z** — hosted **and** clean-clone. See `deploy/VERCEL.md`; `NEXT_PUBLIC_` scoping now matters |
 | D-7 | `challengeWindow == 0` lets the verifier key attest+release in one block | A | ✅ **resolved** — bounded 60 s … 30 days at construction; `ChallengeWindowOutOfRange` |
