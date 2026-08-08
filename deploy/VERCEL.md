@@ -28,20 +28,33 @@ scrapers are inconsistent about resolving relative image paths, so those three a
 on purpose while every other asset reference is relative — which is what lets the same file
 render correctly opened straight off disk.
 
-## Later: swapping in the real app
+## Swapping in the real app — do this now
 
-When T-18 lands, change `vercel.json` to:
+`web/` stopped being a scaffold on 2026-08-08: 50 source files, 665 passing tests, a clean
+`next build`, and `/` is a real "my jobs" screen with three viewer tabs and three distinct
+empty states. The holding page has done its job.
 
-```json
-{
-  "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "rootDirectory": "web"
-}
-```
+**One dashboard setting, then a redeploy.** `rootDirectory` is *not* a valid `vercel.json`
+key — Root Directory is a project setting and nothing else can set it:
 
-Keep `site/` around — it is a useful thing to point at if the app ever breaks during judging.
+> Vercel → the `monescrow` project → **Settings → General → Root Directory** → `web` → Save
+
+Once Root Directory is `web`, Vercel reads **`web/vercel.json`** (already written: framework
+`nextjs`, plus the same three security headers) and the root `vercel.json` becomes dead
+config. It is left in place rather than deleted so that reverting is one setting away.
+
+Redeploy from **Deployments → ⋯ → Redeploy** on the latest commit, or just push.
+
+**Before you flip it, know what changes.** The app's `/` reads
+`NEXT_PUBLIC_FACTORY_ADDRESS`, which is still empty because G2 has not happened. The page
+handles that deliberately — `hasFactory()` false renders "nothing was ever asked" rather than
+"you have no jobs", which is the honest message. So a judge landing on the app today sees a
+working, empty product rather than the pitch. The holding page argues; the app demonstrates.
+Until the factory is deployed, the holding page is arguably the better first impression.
+
+**Reverting** is Root Directory → blank, which puts the root `vercel.json` and `site/` back in
+charge. Worth keeping `site/` regardless — it is a useful thing to point at if the app breaks
+mid-judging.
 
 ## Environment variables — the part worth reading twice
 

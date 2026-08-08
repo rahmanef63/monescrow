@@ -189,16 +189,25 @@
 
   <section>
     <h2>What is actually built</h2>
-    <p>Honest status. This page is a placeholder while the interface is finished — everything below is checkable in the repository.</p>
+    <p>
+      Honest status, and everything below is checkable in the repository. The interface is
+      built — mobile-first, installable, 665 tests — but <strong>this page is not it</strong>:
+      the deployment still points at this static holding page, and the app is one project
+      setting away from replacing it. Until then, <code>DEMO.md</code> runs the whole thing
+      locally from a clean clone.
+    </p>
     <table>
       <tr><th>Piece</th><th>State</th></tr>
       <tr><td>Escrow + factory contracts</td><td class="ok">written, compiling, formatted</td></tr>
-      <tr><td>Contract test suite</td><td class="ok">130 tests across 10 suites, 8/8 mutations caught</td></tr>
+      <tr><td>Contract test suite</td><td class="ok">133 tests across 10 suites, 8/8 mutations caught</td></tr>
       <tr><td>Cancun support on Monad</td><td class="ok">probed on the live chain, not assumed</td></tr>
-      <tr><td>Clean-clone build</td><td class="ok">proven from a tree with no dependencies</td></tr>
+      <tr><td>Clean-clone build</td><td class="ok">proven by cloning, not by copying a stripped tree</td></tr>
       <tr><td>Safe deployment relay</td><td class="ok">full proposal dry run completed</td></tr>
       <tr><td>Brand, empty states, deck</td><td class="ok">delivered against a frozen manifest</td></tr>
-      <tr><td>Web interface</td><td class="wip">in progress</td></tr>
+      <tr><td>Verifier service</td><td class="ok">HTTP + GitHub checks, EIP-712 signing, bound to the on-chain criteria hash</td></tr>
+      <tr><td>Brief &rarr; milestones parser</td><td class="ok">works with no API key at all &mdash; that path is tested hardest</td></tr>
+      <tr><td>In-app assistant</td><td class="ok">tool calling; it proposes a button, a human presses it</td></tr>
+      <tr><td>Web interface</td><td class="ok">665 tests, mobile-first, installable &mdash; not yet the page you are reading</td></tr>
       <tr><td>Deployed + verified on explorers</td><td class="wip">test gate green; waiting on the deployment Safe</td></tr>
     </table>
     <div class="warn">
