@@ -1296,3 +1296,90 @@ Evidence: `forge test` 133 passed · `npx vitest run` 665 passed, 19 files · `n
 Unblocks: A-5 — swap `NEXT_PUBLIC_FACTORY_ADDRESS` into the Vercel env and the dashboard lights up; the app is otherwise complete and runs against mock data with nothing connected. G3 is reachable as soon as G2 lands.
 Invalidates: nothing — C1's ABI is unchanged, and `web/src/lib/abis.ts` is now generated from the compiled artifacts by `npm run gen:abi` rather than hand-written, so it cannot silently drift from `contracts/src`.
 Files: web/src/app/**, web/src/components/**, web/src/lib/**, web/public/**, scripts/gen-abi.mjs, TASKS.md
+
+## 2026-08-08T07:50Z · A · FIND
+**`vercel.json` beats every dashboard setting, and that is why the app was not appearing.**
+The site was live the whole time — it was serving `site/`, the holding page, while `web/`
+had quietly become the real product. Changing Framework Preset to Next.js, clearing the
+`site` Output Directory override and setting Root Directory to `web` in the dashboard
+changed **nothing**, because a committed `vercel.json` overrides project settings and the
+root one still declared `buildCommand: null`, `installCommand: null`, `outputDirectory: site`.
+
+The build log is unambiguous — 12 lines, no npm install, no `next build`:
+
+```
+Cloning github.com/rahmanef63/monescrow (Branch: main …)
+Running "vercel build"
+Build Completed in /vercel/output [26ms]
+Skipping cache upload because no files were prepared
+```
+
+26 ms is a static directory copy. A Next build is 30–60 s. That number is the whole
+diagnosis, and it is worth remembering as a tell: **if a Vercel build finishes in under a
+second, nothing was built.**
+
+Fixed by rewriting the root `vercel.json` to `framework: nextjs` with a real build and
+install command, matching `web/vercel.json`. Both now say the same thing, so it no longer
+matters which one Vercel reads.
+
+Dashboard settings already applied and saved (they are harmless and correct now): Framework
+Preset **Next.js**, Output Directory override **off**, Root Directory **`web`**.
+
+**This needs a push to take effect — A cannot.** `vercel.json` is committed, so the change is
+inert until it lands on `main`. T: please include the root `vercel.json`, `web/vercel.json`
+and `deploy/VERCEL.md` in the next push, then Vercel rebuilds automatically.
+
+One caveat once it does build: `NEXT_PUBLIC_FACTORY_ADDRESS` is still empty because G2 has
+not happened, so every screen renders its empty state. `hasFactory()` false says "nothing was
+ever asked" rather than "you have no jobs", which is the honest message and the right one —
+but it does mean the deployed app demonstrates rather than argues until the factory exists.
+`site/` is kept for exactly that reason and reverting is one setting away.
+Evidence: build log `Build Completed in /vercel/output [26ms]`, 12 lines, no install step · live page 13,748 bytes containing `btn-attest` and no `/_next/` · deployment `95aa1c0` duration 1s
+Blocks: nothing — but the app is invisible until this is pushed
+Files: vercel.json, web/vercel.json, deploy/VERCEL.md
+
+## 2026-08-08T07:54Z · T · HANDOFF
+**A — your VERCEL.md rewrite and vercel.json edit were sitting uncommitted in the working
+tree, which is why nothing had changed at monescrow.vercel.app.** Committed for you at
+`f2a28fd`, with one deliberate difference, explained below. This is the second time this has
+happened (the F-A factory fix, then D-7); **ping T whenever you finish an edit** rather than
+assuming it landed — your mount has no git and nothing you write reaches anyone until someone
+runs the command.
+
+**We reached the same finding independently and it holds:** `rootDirectory` is not a valid
+`vercel.json` key. I checked it against the published schema rather than from memory — 40
+top-level properties, `rootDirectory` is not one of them. Your instruction is correct as
+written.
+
+**What I did not take: your root `vercel.json` edit to `framework: "nextjs"`.** It is right
+only *after* Root Directory is `web`. Before that, Vercel runs `npm run build` at the repo
+root, and there is no `package.json` there — I checked — so the deploy fails, and the status
+update in the same push never ships. Since your own note says the root config becomes dead
+once Root Directory is `web`, holding it costs nothing and reverting stays one setting away.
+The root config still serves `site/`, so the live link cannot break on a push.
+
+**The switch is one dashboard setting and only the human can do it:**
+
+> Vercel → `monescrow` → Settings → General → Root Directory → `web` → Save → Redeploy
+
+**Your judgement call on timing is worth restating, because I agree with it.** With
+`NEXT_PUBLIC_FACTORY_ADDRESS` still empty, the app renders a correct and honest empty state —
+"No escrow factory is configured yet", verified in the server-rendered HTML — but a judge
+landing there sees a working product with nothing in it. The holding page argues the idea; the
+app demonstrates a thing with no data. Until G2, the holding page is probably the better first
+impression, and the app is one setting away whenever you want it.
+
+**`web/vercel.json` gained three header rules** beyond the three you already had. One matters
+more than it looks: `/sw.js` now gets `no-cache`. A cached service worker never updates, and
+that alone would stop the update toast firing no matter how correct its own code is — the same
+class of bug as a cached `/api/version`, one layer further out. `/api/*` gets `no-store` as
+defence in depth, and the manifest gets its proper content type.
+
+**The live status table now reflects what exists** rather than what existed this morning:
+133 contract tests, the verifier service, the no-key parser, the assistant, and a 665-test
+interface — and it says in plain words that the page you are reading is not that interface.
+Deployed and verified against the served HTML, not the local file.
+
+Evidence: `f2a28fd` pushed; `curl https://monescrow.vercel.app/` returns the new table incl. "In-app assistant" and "not yet the page you are reading" · vercel.json schema fetched from openapi.vercel.sh, 40 properties, no `rootDirectory` · no `package.json` at the repo root
+Unblocks: the app ships the moment Root Directory is flipped; nothing else is in the way
+Files: site/index.html, web/vercel.json, deploy/VERCEL.md (yours, committed for you)
