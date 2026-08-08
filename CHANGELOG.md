@@ -2062,3 +2062,73 @@ the signer to refuse a correct deployment.
 Evidence: `npx vitest run` → 752 passed, 25 files · `npx tsc --noEmit` → exit 0 with `.next` deleted · `npx next build` clean · design lint 7/7 · architecture test proven to still bite via a `fetch('/api/documents')` on the job page
 Unblocks: A can perform the happy path in the product rather than in a scripted page, once G2 lands
 Files: web/src/components/WorkPanel.tsx, web/src/lib/documents.ts, web/src/lib/documents.test.ts, web/src/app/job/[address]/page.tsx, web/src/lib/architecture.test.ts, TASKS.md
+
+## 2026-08-08T09:52Z · A · DONE
+**Both of T's deploy-day findings fixed. The second one would have sunk the deployment.**
+
+**RUNBOOK init-code hash was wrong, and wrong in the most dangerous direction.** It claimed
+`15,787 B / 0xfa55d0d3…`. The truth is `15,948 B / 0xab0dd6e997a9544871f4d3fe28e11e847569d4ed25af026e0f8fa573095509b7`.
+A recorded that hash, then changed `EscrowFactory` **twice** — the F-A pagination clamp and the
+D-7 challenge-window bounds — and never went back. Step 3 instructs the signer to reject a
+mismatch, so following the runbook would have meant **refusing the correct bytecode and
+trusting nothing.** Exactly the failure this project keeps re-learning: evidence recorded once
+and never re-derived becomes a confident lie.
+
+The fix is not a better number. **There is now no number in that file.** The step says run
+`make initcode` and compare against what you are about to sign. A constant copied out of a
+build into prose starts decaying the moment the source changes; a command reads the source you
+are actually deploying and cannot go stale.
+
+**`make repro` silently lied without `jq`.** `jq … | sha256sum` on a machine with no jq prints
+the sha256 of an **empty stream** and exits 0 — a confident, meaningless hash that would have
+"proved" a reproducible build that never happened. On Windows, which is where this runs, jq is
+not present by default. Replaced with a node one-liner that errors on a missing or empty
+artifact and exits non-zero. A verification step that cannot fail is not a verification step.
+
+Verified after both fixes: `make repro` → EscrowFactory `851cc829…` (15,920 B), Escrow
+`d3ae2031…` (10,292 B); `make initcode` → 15,948 B, `0xab0dd6e9…`.
+
+**OpenRouter groundwork.** `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` added to
+`web/.env.example`, `web/.env.local` and `deploy/vercel-env.example`. The provider
+implementation itself is T's — `provider.ts` already injects `llm(credential)` as a factory, so
+it is a new sibling to `anthropic.ts` plus a wiring change, not a rewrite. Being honest about
+scope: swapping an OpenAI-shaped API in behind an Anthropic-shaped one is not a five-minute
+change done safely, and the demo does not depend on it — the deterministic template runs with
+no credentials at all, which is the path a judge actually hits.
+Evidence: `make initcode` → 15,948 B / `0xab0dd6e9…` (was documented as 15,787 B / `0xfa55d0d3…`) · `make repro` runs without jq and reports both runtime hashes · env vars present in all three files
+Invalidates: the old init-code constant everywhere it was quoted
+Files: deploy/RUNBOOK.md, contracts/Makefile, web/.env.example, web/.env.local, deploy/vercel-env.example
+
+## 2026-08-08T10:04Z · A · FIND
+**Wrote a QR encoder, verified it, and threw it away. Verification is the whole entry.**
+
+`/demo` needed scannable links for the room. The attractive option was a hand-rolled byte-mode
+encoder — ~200 lines, no dependencies, no network call on the critical path of a live talk, and
+no need to touch T's `package.json`. Wrote it, versions 1–10 at level M, Reed–Solomon and all.
+
+Then checked it against the `qrcode` package on the exact URLs it would render:
+
+```
+DIFF   13  v3  29x29  https://monescrow.vercel.app/
+DIFF  302  v3  29x29  https://monescrow.vercel.app/demo
+DIFF   13  v3  29x29  https://monescrow.vercel.app/api/blank
+```
+
+Right version, right size, a square that looks entirely convincing — and 13 modules wrong,
+which scans as nothing or, worse, as something else. **The file's own comment warned about
+exactly this failure mode and it happened anyway.** That is the case for verifying rather than
+reasoning about correctness, made against my own work: I was confident, I was wrong, and only
+the comparison knew.
+
+Discarded it. The four URLs are fixed and known at build time, so nothing needs encoding at
+runtime — generated them once with the reference encoder and committed static SVGs to
+`web/public/qr/`. All v3, 29×29, level M, 4-module quiet zone. Zero dependencies, zero network
+calls, and *correct*, which the clever version was not. `web/src/lib/qr.ts` is now the target
+table plus the regeneration command, and it keeps the post-mortem so the next person does not
+retry the same shortcut.
+
+**In `/demo`:** a four-up QR grid above the fold — the app, this console, the blank page, the
+repo — any of which blows up to 256 px for projecting. It is the one screen where the audience
+can act, so it sits above the script rather than below it.
+Evidence: module-by-module comparison against `qrcode` → 13/302/13 mismatches, encoder rejected · four SVGs generated and committed · `next build` clean, `/demo` static · design lint still 7/7 (245 declarations)
+Files: web/src/lib/qr.ts, web/public/qr/*.svg, web/src/app/demo/page.tsx

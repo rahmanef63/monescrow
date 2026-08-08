@@ -57,13 +57,27 @@ initcode: setup
 # working tree — EscrowFactory sha256 0013af7e…, Escrow sha256 fdd957ca….
 repro: setup
 	forge build
-	@echo "EscrowFactory runtime sha256:"
-	@jq -r '.deployedBytecode.object' out/EscrowFactory.sol/EscrowFactory.json | sha256sum
-	@echo "Escrow runtime sha256:"
-	@jq -r '.deployedBytecode.object' out/Escrow.sol/Escrow.json | sha256sum
+	@node -e "                                                                      \
+	  const fs=require('fs'), c=require('crypto');                                  \
+	  let bad=0;                                                                    \
+	  for (const n of ['EscrowFactory','Escrow']) {                                 \
+	    const p='out/'+n+'.sol/'+n+'.json';                                          \
+	    if(!fs.existsSync(p)){console.error('missing '+p);bad=1;continue;}           \
+	    const o=JSON.parse(fs.readFileSync(p,'utf8')).deployedBytecode.object;       \
+	    if(!o||o.length<10){console.error(n+': empty bytecode');bad=1;continue;}     \
+	    const h=c.createHash('sha256').update(o).digest('hex');                      \
+	    console.log(n.padEnd(14)+' runtime sha256 '+h+'  ('+((o.length-2)/2)+' B)'); \
+	  }                                                                             \
+	  process.exit(bad);"
 	@echo ""
 	@echo "Compare against the chain once deployed:"
-	@echo "  cast code <FACTORY> --rpc-url $(RPC) | sha256sum"
+	@echo "  cast code <FACTORY> --rpc-url $(RPC) | tr -d '\\n' | sha256sum"
+
+# Was `jq ... | sha256sum`. On a machine without jq that pipeline prints the sha256 of an
+# EMPTY STREAM and still exits 0 — so it would have reported a confident, meaningless hash
+# and "proved" a reproducible build that never happened. Node ships with the toolchain
+# already, errors loudly on a missing or empty artifact, and exits non-zero. A verification
+# step that cannot fail is not a verification step.
 
 # Cancun is not assumed here, it is probed. MCOPY (EIP-5656) must return 0x01…, and
 # TSTORE/TLOAD (EIP-1153) must return 0x07. Both were confirmed on Monad testnet before

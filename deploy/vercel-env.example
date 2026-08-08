@@ -71,6 +71,10 @@ GITHUB_TOKEN=
 # is what runs on a judge's machine with no credentials at all.
 ANTHROPIC_API_KEY=
 
+# OpenRouter — one key, many models. Paste this one yourself.
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
+
 # ─────────────────────────────────────────────────────────────────────────────
 # LEAVE UNSET ON VERCEL
 # ─────────────────────────────────────────────────────────────────────────────

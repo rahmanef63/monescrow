@@ -17,7 +17,7 @@ are identical on testnet and mainnet.
 | Deployer agent | `0x5e6F6C87604373d80A7688788C18A7e5AABeD7eA` | ✅ generated, **unfunded** |
 | Human owner EOA | *(gitignored)* | ✅ funded, 54.5 MON |
 | Old MonFund Safe | `0x7D9f9957…51e174123` | ⛔ disposable, do not reuse |
-| Factory init code | 15,787 B, keccak `0xfa55d0d3c6ba038111612982236294823982eaa6d4e3fa0079e2cc299c36628e` | ✅ reproducible |
+| Factory init code | **derive it fresh — see below** | ⚠ never hardcode |
 
 Both keystores sit in `deploy/keys/`, inside the project folder rather than a sandbox that
 evaporates. **That is the entire fix for what froze the previous Safe** — its second owner was
@@ -84,8 +84,23 @@ Alfa runs this through the file-spool relay because the sandbox proxy refuses
 Transaction Service POST. Already proven end to end against a dummy Safe — see
 `tools/relay/README.md`.
 
-Verify the bytecode hash matches `0xfa55d0d3…` **before** signing. A truncated paste deploys
-different code that verifies against nothing.
+**Derive the expected hash at signing time, never from this file.**
+
+```bash
+cd contracts && make initcode        # prints length + keccak of the current source
+```
+
+Compare that to the `DEPLOYMENT_BYTECODE` you are about to propose. They must match.
+
+> **This step previously shipped a wrong number and would have rejected a correct deployment.**
+> The runbook hardcoded `15,787 B / 0xfa55d0d3…`, recorded before the F-A pagination clamp and
+> the D-7 challenge-window bounds. Both changed `EscrowFactory`, so the truth became
+> `15,948 B / 0xab0dd6e9…` and nobody updated the doc. A signer following the old instruction
+> would have refused the right bytecode and trusted nothing.
+>
+> The fix is not a better number — it is *not having a number here*. Any constant copied out of
+> a build into prose starts decaying the moment the source changes. `make initcode` cannot go
+> stale because it reads the source you are actually deploying.
 
 ## Step 4 — sign and execute *(human, 2-of-2)*
 
