@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Providers } from './providers'
@@ -79,7 +80,20 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 }
 
-export default function RootLayout({ children }: LayoutProps<'/'>) {
+/**
+ * Typed explicitly rather than with Next 16's generated `LayoutProps<'/'>`.
+ *
+ * That helper is written into `.next/types/` **during** `next build`, so on a fresh clone it
+ * does not exist yet and `tsc --noEmit` fails with `TS2304: Cannot find name 'LayoutProps'`
+ * before anything has been built. The documented gate runs typecheck first, which made a
+ * perfectly good checkout look broken on someone else's machine — the worst kind of bug,
+ * because it only appears for the person you most want to impress.
+ *
+ * Depending on a build artifact from source is the actual mistake; reordering the commands
+ * would only have hidden it. A root layout's props are `{ children: ReactNode }` and nothing
+ * about that needs generating.
+ */
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-dvh bg-zinc-950 font-sans text-zinc-100">
