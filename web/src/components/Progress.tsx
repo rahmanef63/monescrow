@@ -61,8 +61,8 @@ export function stepsFor(state: MState, paid: boolean): Step[] {
 
 export function Stepper({ steps, caption }: { steps: Step[]; caption?: string }) {
   return (
-    <div className="px-4 py-4">
-      <ol className="flex items-center">
+    <div className="px-3 py-4">
+      <ol className="flex items-start">
         {steps.map((s, i) => (
           <li key={s.key} className="flex min-w-0 flex-1 items-center last:flex-none">
             <span className="flex flex-col items-center gap-1.5">
@@ -77,7 +77,7 @@ export function Stepper({ steps, caption }: { steps: Step[]; caption?: string })
                 }`}
               />
               <span
-                className={`text-[13px] whitespace-nowrap ${
+                className={`text-[11px] whitespace-nowrap ${
                   s.state === 'todo' ? 'text-zinc-600' : s.state === 'active' ? 'text-warning' : 'text-zinc-400'
                 }`}
               >
@@ -87,7 +87,7 @@ export function Stepper({ steps, caption }: { steps: Step[]; caption?: string })
             {i < steps.length - 1 ? (
               <span
                 aria-hidden
-                className={`-mt-5 h-0.5 min-w-2 flex-1 ${s.state === 'done' ? 'bg-accent' : 'bg-zinc-800'}`}
+                className={`mt-1.5 h-0.5 min-w-1.5 flex-1 ${s.state === 'done' ? 'bg-accent' : 'bg-zinc-800'}`}
               />
             ) : null}
           </li>
@@ -150,12 +150,14 @@ export function Outcomes() {
     <Group>
       <Row
         leading={<Dot tone="ok" />}
+        wrap
         label="Silence releases it"
         detail="If nobody objects before the timer ends, anyone can release the funds."
         last={false}
       />
       <Row
         leading={<Dot tone="danger" />}
+        wrap
         label="An objection freezes it"
         detail="If the client objects, the milestone is frozen until the arbiter rules."
         last
@@ -225,14 +227,16 @@ export function ProgressHeader(props: { project: string; milestone: string; amou
     <div className="pt-1">
       <p className="text-[13px] text-zinc-500">Project</p>
       <h1 className="text-3xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">{props.project}</h1>
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <div className="min-w-0">
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[13px] text-zinc-500">Milestone</p>
           <p className="truncate text-xl font-semibold text-zinc-100">{props.milestone}</p>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-[13px] text-zinc-500">{props.amountLabel}</p>
-          <p className="text-xl font-semibold text-zinc-100 tabular-nums">{props.amount}</p>
+        {/* min-w-0 + truncate on BOTH sides: a long label and a long amount were each able to
+            push the other off the screen edge at 390px. */}
+        <div className="min-w-0 shrink text-right">
+          <p className="truncate text-[13px] text-zinc-500">{props.amountLabel}</p>
+          <p className="truncate text-xl font-semibold text-zinc-100 tabular-nums">{props.amount}</p>
         </div>
       </div>
     </div>

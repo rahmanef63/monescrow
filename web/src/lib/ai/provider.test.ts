@@ -119,7 +119,7 @@ describe('resolveCredential', () => {
   it('falls back to the env key when no header is supplied — the self-hosting path', () => {
     const resolved = resolveCredential(NO_HEADERS, { [LLM_KEY_ENV]: SERVER_KEY })
 
-    expect(resolved).toEqual({ source: 'env', credential: { kind: 'api-key', value: SERVER_KEY } })
+    expect(resolved).toEqual({ source: 'env', provider: 'anthropic', credential: { kind: 'api-key', value: SERVER_KEY } })
   })
 
   it('resolves to none when neither is present — no credentials is a supported state', () => {
@@ -132,7 +132,7 @@ describe('resolveCredential', () => {
       { [LLM_KEY_ENV]: SERVER_KEY },
     )
 
-    expect(resolved).toEqual({ source: 'env', credential: { kind: 'api-key', value: SERVER_KEY } })
+    expect(resolved).toEqual({ source: 'env', provider: 'anthropic', credential: { kind: 'api-key', value: SERVER_KEY } })
   })
 
   it('treats an empty header with no env as none — a cleared field gets the template, not a 400', () => {
@@ -220,7 +220,7 @@ describe('proposeMilestones', () => {
 
     const result = await proposeMilestones(
       INPUT,
-      { source: 'env', credential: { kind: 'api-key', value: SERVER_KEY } },
+      { source: 'env', provider: 'anthropic', credential: { kind: 'api-key', value: SERVER_KEY } },
       deps,
     )
 
@@ -531,5 +531,46 @@ describe('the key never escapes', () => {
 
     expect(deepSerialise(result)).not.toContain(USER_KEY)
     expect(deepSerialise(result)).not.toContain(SERVER_KEY)
+  })
+})
+
+describe('resolveCredential across providers', () => {
+  const noHeaders = { get: () => null }
+
+  /**
+   * The regression. A deployment with only `OPENROUTER_API_KEY` set was told it had no
+   * credential at all, so the assistant reported "unavailable" with a working key sitting in
+   * the environment. The registry always knew each provider's env vars; the resolver never
+   * asked it.
+   */
+  it('finds a key from any provider, not only Anthropic', () => {
+    const r = resolveCredential(noHeaders, { OPENROUTER_API_KEY: 'sk-or-v1-real' })
+    expect(r).toEqual({
+      source: 'env',
+      provider: 'openrouter',
+      credential: { kind: 'api-key', value: 'sk-or-v1-real' },
+    })
+  })
+
+  it.each([
+    ['OPENAI_API_KEY', 'openai'],
+    ['GROQ_API_KEY', 'groq'],
+    ['DEEPSEEK_API_KEY', 'deepseek'],
+    ['GEMINI_API_KEY', 'google'],
+  ])('resolves %s to provider %s', (envName, provider) => {
+    const r = resolveCredential(noHeaders, { [envName]: 'k' })
+    expect(r).toMatchObject({ source: 'env', provider })
+  })
+
+  // Anthropic keeps priority so nothing that already worked changes behaviour.
+  it('prefers ANTHROPIC_API_KEY when several are set', () => {
+    const r = resolveCredential(noHeaders, { OPENROUTER_API_KEY: 'a', ANTHROPIC_API_KEY: 'b' })
+    expect(r).toMatchObject({ provider: 'anthropic', credential: { value: 'b' } })
+  })
+
+  it('still reports none when every provider var is blank', () => {
+    expect(resolveCredential(noHeaders, { OPENROUTER_API_KEY: '  ', ANTHROPIC_API_KEY: '' })).toEqual({
+      source: 'none',
+    })
   })
 })

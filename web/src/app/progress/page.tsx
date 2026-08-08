@@ -50,8 +50,20 @@ function inFlight(jobs: readonly JobWithOwed[], now: number) {
     }
   }
 
-  // A window that is nearly out beats one that just opened; that is the whole ordering.
-  hits.sort((a, b) => a.rank - b.rank || a.left - b.left)
+  // A *running* window outranks an elapsed one, and among running windows the one closest to
+  // expiry wins. Sorting on `left` alone got this backwards: an elapsed window has `left === 0`,
+  // so it sorted ahead of every live clock and the screen opened on a milestone whose window had
+  // already closed — no countdown, no outcomes, the one thing this screen exists to show.
+  //
+  // An elapsed-but-Attested milestone is still urgent (anyone can release it), so it stays ahead
+  // of everything that is not Attested; it just no longer beats a clock that is still ticking.
+  hits.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank
+    const aLive = a.left > 0
+    const bLive = b.left > 0
+    if (aLive !== bLive) return aLive ? -1 : 1
+    return aLive ? a.left - b.left : 0
+  })
   return hits[0] ?? null
 }
 
@@ -96,7 +108,7 @@ export default function ProgressPage() {
     role === 'freelancer' ? 'Amount to receive' : role === 'client' ? 'Amount locked' : 'Amount'
 
   return (
-    <div className="-mx-4 min-h-full bg-zinc-950 px-4 pb-8">
+    <div className="min-w-0">
       {/* -------------------------------------------------------------- who is looking */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <span className="text-[13px] font-medium text-accent">{ROLE_LABEL[role]}</span>

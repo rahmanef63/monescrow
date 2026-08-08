@@ -45,7 +45,7 @@ import type { ReactNode } from 'react'
  */
 export function Screen({ title, trailing, children }: { title: string; trailing?: ReactNode; children: ReactNode }) {
   return (
-    <div className="-mx-4 min-h-full bg-zinc-950 px-4 pb-8">
+    <div className="min-w-0">
       <header className="flex items-end justify-between gap-3 pt-2 pb-1">
         {/* Large title: iOS opens a screen with the name of the thing, set big and tight. */}
         <h1 className="text-4xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">{title}</h1>
@@ -81,6 +81,8 @@ type RowBase = {
   value?: ReactNode
   /** A dot, glyph or icon at the leading edge. */
   leading?: ReactNode
+  /** Let `detail` wrap instead of truncating. For rows whose sentence is the point. */
+  wrap?: boolean
   /** Last row in a group has no separator. */
   last?: boolean
   /**
@@ -93,7 +95,7 @@ type RowBase = {
 export type RowProps = RowBase & { href?: string; onClick?: () => void }
 
 export function Row(props: RowProps) {
-  const { label, detail, value, leading, last, drain, href, onClick } = props
+  const { label, detail, value, leading, last, drain, wrap, href, onClick } = props
   const interactive = Boolean(href || onClick)
 
   const body = (
@@ -101,7 +103,9 @@ export function Row(props: RowProps) {
       {leading ? <span className="shrink-0">{leading}</span> : null}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[17px] text-zinc-100">{label}</span>
-        {detail ? <span className="mt-0.5 block truncate text-[13px] text-zinc-500">{detail}</span> : null}
+        {detail ? (
+          <span className={`mt-0.5 block text-[13px] text-zinc-500 ${wrap ? "" : "truncate"}`}>{detail}</span>
+        ) : null}
       </span>
       {value ? <span className="shrink-0 text-[17px] text-zinc-400 tabular-nums">{value}</span> : null}
       {interactive ? <Chevron /> : null}

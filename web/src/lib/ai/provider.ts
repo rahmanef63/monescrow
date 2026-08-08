@@ -21,6 +21,7 @@
  * message, because an HTTP client's error can quote the request headers it just sent.
  */
 
+import { PROVIDERS } from '@/lib/models/registry'
 import type {
   BriefInput,
   Credential,
@@ -124,9 +125,31 @@ export function resolveCredential(headers: HeadersLike, env: EnvLike): ResolvedC
     return { source: 'header', credential: { kind: 'api-key', value: fromHeader } }
   }
 
-  const fromEnv = asCredentialValue(env[LLM_KEY_ENV])
-  if (fromEnv !== null) {
-    return { source: 'env', credential: { kind: 'api-key', value: fromEnv } }
+  // Any provider's key, not just Anthropic's.
+  //
+  // This read `ANTHROPIC_API_KEY` and nothing else, so a deployment with a perfectly good
+  // `OPENROUTER_API_KEY` set was told it had no credential and fell back to the template — the
+  // assistant reporting "unavailable" while the key sat in the environment two lines away.
+  // The provider registry has always known each provider's env vars; the resolver simply never
+  // asked it. Two credential resolvers existed, one provider-aware and unused, one
+  // Anthropic-only and live.
+  //
+  // `ANTHROPIC_API_KEY` is still tried first so nothing that worked before changes, then the
+  // registry order. `provider` comes back so the caller can send the request to the vendor the
+  // key actually belongs to — routing an OpenRouter key to Anthropic is the same mistake in the
+  // other direction.
+  const direct = asCredentialValue(env[LLM_KEY_ENV])
+  if (direct !== null) {
+    return { source: 'env', provider: 'anthropic', credential: { kind: 'api-key', value: direct } }
+  }
+
+  for (const [slug, conn] of Object.entries(PROVIDERS)) {
+    for (const name of conn.envVars) {
+      const value = asCredentialValue(env[name])
+      if (value !== null) {
+        return { source: 'env', provider: slug, credential: { kind: 'api-key', value } }
+      }
+    }
   }
 
   return { source: 'none' }

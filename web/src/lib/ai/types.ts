@@ -52,7 +52,12 @@ export type Credential = { kind: 'api-key' | 'oauth'; value: string }
 export type CredentialSource = 'header' | 'env' | 'none'
 
 export type ResolvedCredential =
-  | { source: 'header' | 'env'; credential: Credential }
+  | {
+      source: 'header' | 'env'
+      /** Which provider the key belongs to, when it came from a provider-specific env var. */
+      provider?: string
+      credential: Credential
+    }
   | { source: 'none' }
 
 /**

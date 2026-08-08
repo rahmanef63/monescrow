@@ -896,7 +896,19 @@ export async function POST(request: Request): Promise<Response> {
   // attacker-controlled URL, it leaves for the wrong vendor's real one, which is enough to burn
   // it. An empty ref means `normaliseRef`'s Anthropic default, which is the provider that env
   // key actually belongs to. BYOK is unaffected: a caller who brought a key still picks its model.
-  const modelRef = callerModelRef(request.headers)
+  // With a caller key, the caller picks the vendor. Without one, the *key* picks it: whichever
+  // provider's env var the server actually has set. Defaulting to Anthropic here would post an
+  // OpenRouter key to api.anthropic.com — the same wrong-vendor mistake the guard above prevents
+  // in the other direction. `OPENROUTER_MODEL` is honoured because a router key is useless
+  // without naming a model on it.
+  const caller = callerModelRef(request.headers)
+  const serverSide = resolveCredential(request.headers, process.env)
+  const envProvider = serverSide.source === 'env' ? serverSide.provider : undefined
+  const modelRef =
+    caller ||
+    (envProvider === 'openrouter' && process.env.OPENROUTER_MODEL?.trim()
+      ? `openrouter/${process.env.OPENROUTER_MODEL.trim()}`
+      : (envProvider ?? ''))
 
   const result = await handleChat(body, request.headers, {
     env: process.env,
