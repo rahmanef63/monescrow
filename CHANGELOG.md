@@ -1729,3 +1729,115 @@ redirected.
 Evidence: `grep -rl 'monescrow:open-chat' .next/static/chunks/` and `grep -rl 'no MON has reached'` return the same chunk after the fix · `tsc --noEmit` exit 0, `next build` clean · reference studied at `models-rahmanef-com@main`: `src/resolve.js` (host-gate), `src/registry.js`, `src/store.js`, `src/call.js`
 Unblocks: a judge whose key is not an Anthropic key gets a working assistant instead of a silent template fallback
 Files: web/src/app/layout.tsx, TASKS.md
+
+## 2026-08-08T09:02Z · A · HANDOFF
+**C11 design system + a linter that makes "the design is bad" a pass/fail instead of an
+opinion.** `docs/05-DESIGN.md` and `tools/design-lint.mjs`. Nothing in `web/src` was touched —
+that is T's under C10, and T is pushing every few minutes.
+
+**The complaint was right and is now a number.** Type usage across 17 components:
+
+```
+    text-xs     100  ████████████████████████████████████████
+    text-sm      84  ██████████████████████████████████
+    text-base    15  ██████
+    text-lg       4  ██
+    text-xl       3  █
+    text-2xl      4  ██
+```
+
+**88% of all type sits in the two smallest sizes.** That is the whole problem in one shape:
+when everything is small nothing is emphasised, so the eye has no entry point and every screen
+reads as a wall. The reference deck does the opposite — one enormous image, one bold price, one
+short title, and everything else shrunk until it stops competing. It reads in half a second
+because most of it is deliberately *not asking to be read*.
+
+Baseline: **5/7 rules already pass.** One primary action per route, spacing on the 4px grid,
+cards concise, cards carry state visuals, tap targets ≥44px. The two failures are exactly the
+hierarchy problem — `P3a` text-xs at 48% (needs <40%), `P3b` display sizes at 2% (needs ≥5%).
+So this is not a rewrite. It is a re-weighting: promote the one number that matters on each
+card to display type, demote its labels to micro, and the ratios move.
+
+The spec carries ASCII wireframes for jobs list, job detail, empty state and settings, mapped
+from the reference onto our domain. The key translation: **we have no photographs, so status is
+our image.** A large coloured state block does the work the food photo does — it carries meaning
+pre-verbally, and prose only supports it. The reference's nutrition row
+(`240 ккал · 628 белки · 20 жиры`) becomes our numbers row: amount, milestones, window, settled
+— big figures, tiny labels, no sentence. Five facts in the space a sentence spends on one.
+
+**One rule has a deliberate exemption.** The empty state's "No escrow factory is configured, so
+nothing has been read from the chain" breaks P5's length cap and stays. It distinguishes *not
+asked* from *asked and empty*, and confusing those wastes somebody's afternoon hunting a missing
+escrow. Design rules serve comprehension; where they collide, comprehension wins. A rule without
+a stated exemption is a rule someone will quietly break later and feel bad about.
+Evidence: `node tools/design-lint.mjs` → 5/7 passing, P3a 48% (100/210), P3b 2% (4/210) · 17 components scanned, read-only
+Unblocks: T can iterate against a re-runnable oracle instead of taste
+Files: docs/05-DESIGN.md, tools/design-lint.mjs
+
+## 2026-08-08T08:53Z · T · DONE
+**Wave 5: the assistant now works with any provider's key, and the key cannot be redirected.**
+T-23…T-26 done, T-27 half done and marked as such on the board. 703 web tests, tsc clean with
+no `.next` present, `next build` clean.
+
+    models/registry.ts   9 providers -> { baseUrl, protocol, envVars, defaultModel }
+    models/resolve.ts    parseRef + resolveModel, host-gated
+    models/store.ts      CredentialStore: request header -> env -> none
+    models/call.ts       both wire protocols, tool calling translated in each direction
+
+**The security property, and why it needed building rather than assuming.** Both AI routes take
+a key from a request header. If the caller could also name the endpoint, `provider: "anthropic"`
+plus their own `baseUrl` would have our server post somebody's key to a host they chose — from
+our IP, over our TLS, in a request that looks entirely normal. So a provider in the registry is
+**always** reached at its registry URL and any supplied override is discarded; an override is
+honoured only for providers we do not know, which cannot resolve without one and where the
+caller is necessarily naming their own endpoint for their own key. A test loops every registry
+provider and asserts none can be redirected, rather than checking one and generalising.
+
+**What was actually hard: tool calling in two dialects.** Anthropic carries a tool result as a
+`tool_result` block inside a **user** turn; OpenAI needs its own `role: "tool"` message keyed by
+`tool_call_id`. One Anthropic turn can hold several results, and flattening them into one
+message drops every result but the first — which presents as the assistant ignoring what it
+just looked up, with nothing in any log to say why. There is a test that sends two results and
+asserts two `tool` messages come out with the right ids.
+
+Also handled because they happen in production and not in a demo: an OpenAI model emitting
+malformed JSON in `tool_calls.function.arguments` yields an empty input the tool layer can
+reject with a message the model can read, rather than throwing and killing the turn. And an
+upstream error is summarised to its status, never echoed — provider error bodies routinely
+quote the request including headers, so passing one through would put the user's own key in a
+response.
+
+**One thing I deleted rather than kept.** The header reader originally tried three spellings of
+`x-llm-key` "to be safe". `Headers` is case-insensitive by specification, so the guessing was
+dead weight — and worse, it let a test stub that was *not* case-insensitive pass, meaning the
+test measured the stub instead of the code. Now the reader does the one correct lookup and the
+stub behaves like the real interface.
+
+**Still Anthropic-only, deliberately not rushed:** `/api/ai/milestones`. Its provider uses
+structured output, which is `output_config` on Anthropic and `response_format` on OpenAI — a
+second translation with its own failure modes, and unlike the chat there is already a working
+answer when it cannot run: the deterministic template, which is the path that has to work on a
+judge's machine anyway. Chat was the visible breakage; this is a quality upgrade and it can be
+done without pressure.
+
+**And the reason any of this was reachable: the assistant button did nothing at all.** `Dock`
+fired `monescrow:open-chat`, `ChatSheet` listened for it, and nothing had ever mounted
+`ChatSheet`. Two agents built two correct halves of one interaction and no typecheck, test or
+build mentions a component nobody renders. Mounted in the root layout; verified by finding the
+event name and the sheet's own copy in the same shipped client chunk.
+
+**For A's planning — done, and remaining on T's side:**
+
+    done      T-1..T-26, the assistant tool layer, PWA + update toast, the three
+              judge-path defects in web/, the chat mount, provider-agnostic BYOK
+    remaining T-27's second half (milestones parser on the model layer, plus a
+              provider picker in the chat sheet). Nothing blocking.
+    not T's   the 8 audit blockers in A-owned files from 08:34Z. Two bite on deploy
+              day: `make repro` prints the sha256 of an empty stream when `jq` is
+              absent, and RUNBOOK's init-code hash is 15,787 B / 0xfa55d0d3… when
+              the real one is 15,948 B — step 3 tells the signer to refuse anything
+              that does not match, so it will refuse a correct deployment.
+
+Evidence: `npx vitest run` → 703 passed, 21 files · `npx tsc --noEmit` → exit 0 with no `.next` · `npx next build` clean · host-gate test loops all 9 providers · two-tool-result translation asserted · reference studied at `models-rahmanef-com@main`
+Unblocks: a judge holding an OpenAI, OpenRouter, Groq, Gemini, DeepSeek, xAI, Mistral or GitHub Models key now gets a working assistant instead of silence
+Files: web/src/lib/models/**, web/src/app/api/chat/route.ts, web/src/app/layout.tsx, TASKS.md

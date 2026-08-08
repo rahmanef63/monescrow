@@ -58,6 +58,9 @@
  * from the body. Do not add the write tool and leave this comment as a TODO.
  */
 
+import { normaliseRef, parseRef, resolveModel } from '@/lib/models/resolve'
+import { memoryCredentialStore } from '@/lib/models/store'
+import { createTransport, type FetchLike as ModelFetch } from '@/lib/models/call'
 import {
   ANTHROPIC_MESSAGES_URL,
   ANTHROPIC_VERSION,
@@ -825,6 +828,30 @@ export function createChainReader(): Pick<ChatDeps, 'readJob' | 'readOwed'> {
  * Nothing is read at module scope: a deploy without `ANTHROPIC_API_KEY` degrades to
  * `source: "unavailable"` rather than failing to boot with the variable's name in a build log.
  */
+/**
+ * A transport for whatever provider the user's key belongs to.
+ *
+ * `handleChat` already resolves the credential and hands it to the transport, so this only has
+ * to decide *where* that credential may be sent — and that decision is the whole point.
+ * `resolveModel` pins a known provider to its registry endpoint, so no request header can
+ * redirect somebody's key to a host the caller chose. The model reference comes from
+ * `x-llm-model` (`provider/model`, or a bare `provider` for its default); absent, it stays
+ * Anthropic, which is what every existing caller assumes.
+ */
+function createByokChatTransport(modelRef: string, fetchImpl: LlmFetch): ChatTransport {
+  return async (req: TransportRequest): Promise<TransportReply> => {
+    const ref = normaliseRef(modelRef)
+    const { provider } = parseRef(ref)
+    const resolved = await resolveModel(ref, {
+      // The key is already in hand; the store is just the seam resolveModel reads it through.
+      // Note there is no `baseUrl` argument at all — there is nothing here to override.
+      store: memoryCredentialStore({ [provider]: req.credential.value }),
+    })
+    const reply = await createTransport(resolved, fetchImpl as unknown as ModelFetch)(req)
+    return reply as TransportReply
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   let body: unknown
   try {
@@ -839,9 +866,10 @@ export async function POST(request: Request): Promise<Response> {
   const result = await handleChat(body, request.headers, {
     env: process.env,
     // The cast narrows the global fetch onto the POST-with-body seam declared above.
-    transport: createAnthropicChatTransport({
-      fetchImpl: globalThis.fetch as unknown as LlmFetch,
-    }),
+    transport: createByokChatTransport(
+      request.headers.get('x-llm-model') ?? '',
+      globalThis.fetch as unknown as LlmFetch,
+    ),
     readJob: reader.readJob,
     ...(reader.readOwed ? { readOwed: reader.readOwed } : {}),
   })
