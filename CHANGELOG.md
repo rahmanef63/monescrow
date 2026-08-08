@@ -936,3 +936,56 @@ Evidence: `forge test` → 130 passed, 0 failed, 0 skipped · `forge fmt --check
 Unblocks: **A-3** (deploy via Safe), and therefore A-4 → G2. A-16's relay is already proven, so the transport is not an unknown either.
 Invalidates: nothing in flight — C1's ABI is unchanged. `contracts/test/FINDINGS.md` still lists the open items on `src`; only F-A has been fixed.
 Files: contracts/test/*.t.sol, contracts/test/handlers/EscrowHandler.sol, contracts/test/helpers/Attackers.sol, contracts/src/EscrowFactory.sol (A's change, committed by T), TASKS.md
+
+## 2026-08-08T06:12Z · T · FIND
+**G1 re-verified from a genuine clean clone of `origin/main`, not a stripped copy — and the
+documented setup path does not work on Windows.** The gate itself reproduces exactly:
+
+    git clone git@github.com:rahmanef63/monescrow.git
+    forge install --no-git foundry-rs/forge-std@v1.16.2
+    forge install --no-git OpenZeppelin/openzeppelin-contracts@v5.7.0
+    forge fmt --check   -> exit 0
+    forge test          -> 130 passed, 0 failed
+    forge build --sizes -> Escrow 10,252 B, EscrowFactory 15,771 B
+
+Two blockers between that and `make setup && make gate` as `DEMO.md` documents it. Both are
+A-owned files, so they are reported, not patched.
+
+  - **`make` does not exist on Windows.** No make in Git Bash, PowerShell or the PATH. Every
+    command in `DEMO.md` and the `README` is a `make` target, so a judge on Windows is stopped
+    at the first instruction. The Makefile is a good artifact and should stay; it needs a
+    documented raw-command fallback beside it — the six lines above are that fallback,
+    verified.
+  - **`forge install` for OpenZeppelin exits 1 while succeeding.** OZ carries nested
+    submodules (`erc4626-tests`, `halmos-cheatcodes`) that are its own test dependencies, and
+    on Windows the clone of `erc4626-tests` dies with
+    `cannot write keep file ... Filename too long` — MAX_PATH, hit by the pack keep-file
+    inside `.git/modules/`. forge then reports `Error: git clone exited with code 1`.
+    **The install is nevertheless complete and correct**: `@openzeppelin/contracts` resolves,
+    v5.7.0, and the full suite compiles and passes. But `make setup` runs
+    `forge install ... || true`-less, so make aborts on the non-zero exit and never reaches
+    the gate — the setup succeeded and the build stops anyway.
+
+    Two fixes, either is enough: `git config --global core.longpaths true` before setup, or
+    have the Makefile tolerate the exit code for the OZ line specifically and assert
+    `test -f lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol` instead.
+    Worth saying which is more honest: the second, because the failing submodule is genuinely
+    irrelevant to us and pretending the command succeeded is less accurate than checking for
+    the artifact we actually need.
+
+Whether a given Windows judge hits this depends on where they clone — the failure is a path
+length, and this repo's own working copy at `C:\Users\rahma\projects\...` is short enough to
+escape it. That is exactly why it went unnoticed: it does not reproduce in the place the
+setup was first tested.
+
+**Unrelated, left deliberately uncommitted:** `site/`, `vercel.json` and `deploy/VERCEL.md`
+appeared in the working tree during this session and are not T's. They are not staged and not
+pushed. Two reasons: they are outside the G1 change and would muddy what the gate commit
+contains, and T has not read them — this repo is public, and T does not publish files it has
+not looked at. Whoever owns them should commit them; note also that a `vercel.json` sits
+oddly beside the 04:01Z entry recording D-4 as settled on clean-clone-only, so it may be a
+decision that moved rather than a stray file.
+
+Evidence: fresh `git clone` of origin/main into an empty directory → `forge test` 130 passed, `forge fmt --check` exit 0, sizes identical to the working tree · `make` → `command not found` · `forge install` OZ → `EXIT=1` with `fatal: cannot write keep file ...: Filename too long`, tree nevertheless complete at v5.7.0 and the suite green
+Unblocks: A can reproduce G1 from the commit rather than from this changelog
+Files: — (reporting on contracts/Makefile, DEMO.md, README.md — all A-owned)
