@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {BaseTest} from "./Base.t.sol";
 import {Escrow} from "../src/Escrow.sol";
 import {ReentrantFreelancer, RejectingFreelancer} from "./helpers/Attackers.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 /// @dev The two attacker helpers expose the same self-driving surface. This interface only
 ///      names it so one local fixture can drive either of them — it adds no behaviour.
@@ -194,10 +195,18 @@ contract WithdrawTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     /// A payee that calls back into `withdraw()` from its `receive()` must be paid once and
-    /// once only. The guard blocks the nested call — the attacker swallows that revert, so
+    /// once only. The guard blocks the nested call — the attacker records that revert, so
     /// the outer withdrawal still succeeds and the escrow loses exactly one milestone. The
     /// unreleased milestone is still sitting in the escrow, so a second payment would be
     /// real theft, not just an overdraft that would have bounced on its own.
+    ///
+    /// `withdraw()` is defended twice over and this test insists on BOTH defences, because
+    /// either one alone would produce a single payment and hide the loss of the other:
+    ///   * the credit is already zero when the callback runs, so the effect really does
+    ///     happen before the interaction — that survives even without a guard;
+    ///   * the nested call is rejected by the reentrancy guard specifically, not by the
+    ///     contract's own `NothingOwed()` — that survives even with the effect misplaced.
+    /// Asserting only "the nested call failed" would let a refactor delete either defence.
     function test_ReentrantWithdrawIsBlockedAndPaysOnce() public {
         ReentrantFreelancer attacker = new ReentrantFreelancer();
         Escrow e = _escrowWithFreelancer(address(attacker));
@@ -209,10 +218,27 @@ contract WithdrawTest is BaseTest {
         assertEq(address(attacker).balance, 0, "attacker holds nothing yet");
         assertEq(address(e).balance, uint256(M0) + M1, "escrow holds both milestones");
 
+        // The one error that means "the reentrancy guard turned this away". It carries no
+        // arguments, so the whole expected return data is just its four-byte selector.
+        bytes memory guardRejection =
+            abi.encodeWithSelector(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
+
         attacker.attackWithdraw();
+
+        bytes memory nestedRevert = attacker.reentryRevertData();
 
         assertFalse(attacker.reentrySucceeded(), "nested withdraw must never succeed");
         assertEq(attacker.reentryAttempts(), 1, "the attacker did try to re-enter exactly once");
+
+        // Effects before interactions: by the time the ether reached the attacker, the credit
+        // that authorised it was already gone. If this is non-zero the escrow was still
+        // advertising a claimable balance while paying it out.
+        assertEq(attacker.owedAtReentry(), 0, "credit was already cleared before the ether was sent");
+
+        // And the guard is doing its job independently of that ordering: the nested call was
+        // turned away by ReentrancyGuardReentrantCall(), not merely by NothingOwed().
+        assertEq(nestedRevert, guardRejection, "nested withdraw was rejected by the reentrancy guard itself");
+
         assertEq(address(attacker).balance, M0, "attacker received the milestone EXACTLY once");
         assertEq(e.owed(address(attacker)), 0, "credit cleared, not doubled");
         assertEq(address(e).balance, M1, "the unreleased milestone was not drained");

@@ -65,8 +65,12 @@ contract EscrowFactory {
         uint256 total = escrows.length;
         if (offset > total) revert BadRange();
 
-        uint256 end = offset + limit;
-        if (end > total) end = total;
+        // Clamp before adding, never after. `offset + limit` is checked arithmetic, so a
+        // caller passing `type(uint256).max` as an "everything from here" sentinel used to
+        // revert with an arithmetic Panic(0x11) instead of the clamp this function
+        // otherwise promises — and this factory is the only index the frontend has.
+        // Safe because `offset <= total` is already enforced above. (F-A)
+        uint256 end = limit > total - offset ? total : offset + limit;
 
         page = new address[](end - offset);
         for (uint256 i = offset; i < end; ++i) {

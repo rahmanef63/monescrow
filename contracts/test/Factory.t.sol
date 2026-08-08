@@ -179,7 +179,9 @@ contract FactoryTest is BaseTest {
 
     /// The last page is always short. Asking for more than remains must clamp to what
     /// exists rather than revert, so a UI paging with a fixed page size never breaks on
-    /// the final page.
+    /// the final page. Every limit here is small enough that `offset + limit` computes
+    /// without overflowing — that is the genuine clamp, and it works. The overflow
+    /// boundary is a different story and lives in its own test below.
     function test_PaginationClampsALimitPastTheEnd() public {
         address[] memory made = _createMany(5);
 
@@ -190,7 +192,41 @@ contract FactoryTest is BaseTest {
         assertEq(tail[1], made[4], "tail ends at the newest");
 
         address[] memory everything = factory.getEscrows(0, type(uint128).max);
-        assertEq(everything, made, "an enormous limit from zero is just the whole list");
+        assertEq(everything, made, "a limit far past the end is just the whole list");
+    }
+
+    /// `type(uint256).max` is the "give me everything from here" sentinel any frontend
+    /// reaches for, and it must clamp from every offset rather than blow up. This used to
+    /// be a defect: `end = offset + limit` was checked arithmetic, so the sentinel
+    /// overflowed the addition and the call panicked with `Panic(0x11)` from any offset
+    /// above zero — including `offset == length`, the natural stop condition of a paging
+    /// loop. Reported as F-A in `contracts/test/FINDINGS.md`, fixed by A in
+    /// `EscrowFactory.getEscrows` by clamping before adding. This test now pins the fixed
+    /// behaviour; it was deliberately kept rather than deleted, because the boundary needs
+    /// covering whichever way the contract answers.
+    function test_PaginationClampsTheMaxSentinelFromEveryOffset() public {
+        address[] memory made = _createMany(5);
+        uint256 total = factory.escrowCount();
+
+        address[] memory fromZero = factory.getEscrows(0, type(uint256).max);
+        assertEq(fromZero, made, "from zero the sentinel is the whole list");
+
+        address[] memory fromOne = factory.getEscrows(1, type(uint256).max);
+        assertEq(fromOne.length, total - 1, "from one it is everything that remains");
+        assertEq(fromOne[0], made[1], "and it starts at the offset");
+        assertEq(fromOne[fromOne.length - 1], made[total - 1], "and ends at the newest");
+
+        address[] memory fromLast = factory.getEscrows(total - 1, type(uint256).max);
+        assertEq(fromLast.length, 1, "the last page holds exactly the last escrow");
+        assertEq(fromLast[0], made[total - 1], "which is the newest");
+
+        // The stop condition of a paging loop: everything has been read, so the honest
+        // answer is an empty page rather than a revert.
+        address[] memory atEnd = factory.getEscrows(total, type(uint256).max);
+        assertEq(atEnd.length, 0, "offset == length is an empty page, not a panic");
+
+        assertEq(factory.escrowCount(), total, "the index still holds every escrow");
+        assertEq(factory.getEscrows(), made, "and the full read still agrees");
     }
 
     /// `offset == length` is the natural stop condition of a paging loop — the client has

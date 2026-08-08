@@ -17,7 +17,7 @@ A gate is not "we think we're ready", it is a command whose output anyone can re
 | Gate | Condition | Status | Flipped by |
 |---|---|---|---|
 | **G0** interfaces frozen | `docs/01-INTERFACES.md` merged, three workers briefed | ✅ done | A · 2026-08-08 |
-| **G1** contracts proven | `forge test` green · `forge build --sizes` under limit · `forge fmt --check` clean | ⬜ open | T |
+| **G1** contracts proven | `forge test` green · `forge build --sizes` under limit · `forge fmt --check` clean | ✅ done | T · 2026-08-08 |
 | **G2** deployed | Factory + one Escrow verified on MonadVision **and** Monadscan, addresses in `deploy/` | ⬜ blocked by G1 | A |
 | **G3** integrated | full happy path **and** dispute path clicked through in a real browser against testnet | ⬜ blocked by G2 | A |
 | **G4** submittable | README with rendered diagrams · demo recording · clean-clone run instructions | ⬜ blocked by G3 | A |
@@ -53,7 +53,10 @@ parallel is listed below as unblocked.
 | A-19 | `deploy/DEMO-PARAMS.md` — D-3 windows, demo escrow shape, role addresses | ✅ done | — |
 | A-20 | Vendor deps or document `forge install` so a clean clone builds | ✅ done — `make setup && make gate` proven from a tree with no `lib/` | — |
 | A-21 | `tools/check-mermaid.mjs` — parse diagrams with mermaid's own grammar | ✅ done | — |
-| A-22 | Delete duplicate `agent/` tree and the half-init `.git/` (needs Windows) | ⬜ | human |
+| A-22 | Delete duplicate `agent/` tree and the half-init `.git/` (needs Windows) | 🟡 `agent/` gone; `node_modules` symlink still to delete | human |
+| A-23 | `site/` holding page + `vercel.json` + `deploy/VERCEL.md` (D-4 reversal) | ✅ done | — |
+| A-24 | F-A fix in `EscrowFactory.getEscrows` — clamp before adding | ✅ done | — |
+| A-25 | F-B / D-7 contract change: bound `challengeWindow` | ⬜ **announced, awaiting D-7** | human |
 
 **Waiting on exactly one thing.** Every A task that does not touch the live chain is done.
 A-2 → A-3 → A-4 → A-5 → A-6 → A-7 → A-8 → A-11 → G2/G3/G4 all sit behind **D-1: one address**.
@@ -72,15 +75,15 @@ they flip G1.
 
 | ID | Task | State |
 |---|---|---|
-| T-1 | `Construction.t.sol` — every constructor revert path | 🔄 |
-| T-2 | `Acceptance.t.sol` — accept once, cancel only before acceptance | 🔄 |
-| T-3 | `Submission.t.sol` — role, acceptance, deadline, counter, illegal source states | 🔄 |
-| T-4 | `ChallengeWindow.t.sol` — **headline**: silence releases; one second early reverts; window 0 | 🔄 |
-| T-5 | `Dispute.t.sol` — freeze from both states, arbiter-only resolve, both outcomes | 🔄 |
-| T-6 | `Reclaim.t.sol` — **`Attested` survives the deadline**; not early; not twice | 🔄 |
-| T-7 | `Withdraw.t.sol` — pull-based, double withdraw, **reentrancy blocked**, rejecting receiver | 🔄 |
-| T-8 | `Factory.t.sol` — array, `escrowsOf` both parties, pagination, holds no MON | 🔄 |
-| T-9 | `Invariant.t.sol` — money never created or destroyed, one terminal state per milestone | 🔄 |
+| T-1 | `Construction.t.sol` — every constructor revert path | ✅ |
+| T-2 | `Acceptance.t.sol` — accept once, cancel only before acceptance | ✅ |
+| T-3 | `Submission.t.sol` — role, acceptance, deadline, counter, illegal source states | ✅ |
+| T-4 | `ChallengeWindow.t.sol` — **headline**: silence releases; one second early reverts; window 0 | ✅ |
+| T-5 | `Dispute.t.sol` — freeze from both states, arbiter-only resolve, both outcomes | ✅ |
+| T-6 | `Reclaim.t.sol` — **`Attested` survives the deadline**; not early; not twice | ✅ |
+| T-7 | `Withdraw.t.sol` — pull-based, double withdraw, **reentrancy blocked**, rejecting receiver | ✅ |
+| T-8 | `Factory.t.sol` — array, `escrowsOf` both parties, pagination, holds no MON | ✅ |
+| T-9 | `Invariant.t.sol` — money never created or destroyed, one terminal state per milestone | ✅ |
 | — | *(already done by A: `Attestation.t.sol`, 12 passing — use as style reference)* | ✅ |
 
 **Wave 2 — verifier service.** Unblocked now; does not wait for Wave 1.
@@ -137,6 +140,7 @@ Things nobody should silently assume. Raise in `CHANGELOG.md` as a `DECIDE` entr
 | D-1 | Second human wallet for the 2-of-2 Safe — which address? | human | ⬜ **open — paste one address and A-2→A-3→G2 all unblock** |
 | D-2 | Arbiter address for the demo escrows | human | 🟡 decided: same EOA as the second Safe owner — needs D-1's address |
 | D-3 | Default challenge window for the demo (short enough to show live) | A | ✅ **resolved** — product default 3 d, demo preset 90 s; see `deploy/DEMO-PARAMS.md` |
-| D-4 | Is a hosted deployment in scope, or clean-clone instructions only? | human | ✅ **resolved** — clean-clone instructions only, no hosted deployment |
+| D-4 | Is a hosted deployment in scope, or clean-clone instructions only? | human | ✅ **reversed 05:58Z** — hosted **and** clean-clone. See `deploy/VERCEL.md`; `NEXT_PUBLIC_` scoping now matters |
+| D-7 | `challengeWindow == 0` lets the verifier key attest+release in one block | human | ⬜ **open — blocks A-3.** A recommends min 60 s / max 30 days |
 | D-5 | Pin one `forge` version for all three workers | A | ✅ **resolved** — 1.7.1 @ `4072e487`, pinned in `contracts/foundry.toml`; upgrading is now a `DECIDE` |
 | D-6 | Where is the repository of record? No `.git` in this tree | human | 🟡 decided: **this directory** — but Alfa's mount denies `unlink`, so `git init` must be run natively on Windows. Exact commands in the 03:41Z changelog entry. |

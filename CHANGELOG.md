@@ -680,3 +680,259 @@ preset. T-4 keeps testing `challengeWindow == 0` as legal-and-immediate, unchang
 Evidence: `.git` object inventory before the move → 6 blob, 1 tree, 0 commit, 0 refs · `diff` of relative file paths, `agent/` minus `.agents/` → empty · repo root after → no `.git`, no `agent/` · both trees recoverable from scratch quarantine
 Unblocks: a real `git init` (still gated on D-6), and removes the duplicate skill tree that could send a future reader to the copy without the `wallet` skill
 Files: — (repo-level; nothing under contracts/ or web/ touched)
+
+## 2026-08-08T05:20Z · T · DONE
+**D-6 answered by the human, and the repository exists: `github.com/rahmanef63/monescrow`,
+public, `main` pushed.** Every Evidence line from here on can cite a hash that anyone can
+resolve, which is the thing this file has been missing since its first entry.
+
+  - `9192754` first commit — 131 files. `be5b522` — `.gitattributes`.
+  - `contracts/lib/` stays gitignored, so a clean clone needs `make setup` before `make gate`.
+    A-20's clean-clone claim is now literally testable by cloning rather than by copying a
+    tree with directories stripped.
+
+Three things were changed against the instructions as given, each for a reason:
+
+  - **Skipped `echo "# monescrow" >> README.md`.** That is GitHub's boilerplate for an empty
+    repo; this one is not empty, and A had just finished A-9 in that file. Appending a stray
+    heading would have landed on top of four verified Mermaid diagrams.
+  - **`git add -A`, not `git add README.md`** — the boilerplate commits one file.
+  - **Fixed a `.gitignore` bug that made `git add -A` impossible.** The root `node_modules` is
+    a dangling *symlink* into a machine-local `/tmp` (left by the mermaid checker), and the
+    ignore pattern was `node_modules/` — a trailing slash matches only real directories, so
+    git tried to index the symlink and died with `open("node_modules"): Function not
+    implemented`. Pattern is now slash-less. The symlink is left in place so A's tooling keeps
+    working; it is simply never staged.
+
+**Pre-push secret scan, because the repo is public and a push is not reversible in any way
+that matters.** Scanned every staged text blob for 64-hex values, assigned `PRIVATE_KEY` /
+`SECRET` / `API_KEY` / `TOKEN`, and `sk-` / `ghp_` prefixes. Clean: `web/.env.example` carries
+every server-side name with an empty value, `NEXT_PUBLIC_VERIFIER_ADDRESS` is an address and
+public by design per C8, the only other matches were documentation placeholders in
+`.agents/skills/**` (`<public-key>`, `$PRIVATE_KEY`) and the two bytecode keccaks in this
+changelog. Nothing under `deploy/keys/` was staged.
+
+**One repo-level fix that belongs to A's critical path, flagged rather than assumed.**
+`core.autocrlf` is `true` on this machine. The blobs went in as LF, but on the *next* clone
+git would check out CRLF on Windows and LF on Linux — the same commit, different source
+bytes. solc hashes source text into the CBOR metadata it appends to the runtime bytecode
+(`bytecode_hash = "ipfs"`), so that is a different bytecode tail per platform: it would break
+A-12's byte-identical claim across machines and can downgrade explorer verification at A-4
+from a full match to a partial one. Added `.gitattributes` pinning `* text=auto eol=lf`.
+Verified with `git add --renormalize .` that no existing blob changes — the fix is additive,
+it only stops the working tree drifting per platform. A should re-run `make repro` on a fresh
+clone before A-4 rather than taking that on trust.
+
+Evidence: `git push` → `* [new branch] main -> main`; `gh repo view` → `isEmpty: false`, `defaultBranchRef: main`, `pushedAt 2026-08-08T05:17:57Z` · 131 files staged, 0 matches in the secret scan outside documented placeholders · `git add --renormalize .` → only `.gitattributes` staged
+Unblocks: A can cite and resolve commit hashes, and can read `tf/*` branches; the clean-clone half of the definition of done is now checkable by an outsider; D-6 closed
+Files: .gitignore, .gitattributes
+
+## 2026-08-08T05:20Z · T · FIND
+**Mutation-tested the Wave-1 suite against itself: 71 mutations, 62 killed, and three
+survive the entire 125-test suite.** Three auditors broke `src/` in disposable sandboxes and
+checked whether the tests noticed; the three survivors were then re-verified by hand against
+the full merged tree, because a per-batch run can call something uncaught that another file
+actually catches. These three are caught by nothing:
+
+  - **`cancel()`: delete the `if (m.state == MState.Pending)` guard** and refund every
+    milestone unconditionally — 125/125 still green. The guard is load-bearing and the bad
+    state is reachable: `reclaim()` has no `acceptedAt` guard, so after the deadline a client
+    can `reclaim()` a milestone on a never-accepted escrow and then still `cancel()`, which
+    only requires `acceptedAt == 0`. Without the guard the milestone is credited twice, the
+    contract owes more than it holds, and the client's own `withdraw()` reverts
+    `TransferFailed`. **This retracts a claim T published at 04:10Z**: three Wave-1 authors
+    independently called that branch dead, T repeated it in `contracts/test/FINDINGS.md` as
+    convergent evidence, and it is wrong. Three agents agreeing is not three checks.
+  - **`withdraw()`: move `owed[msg.sender] = 0` to after the external call** — the textbook
+    reentrancy hole — 125/125 green.
+  - **`withdraw()`: remove `nonReentrant`** — 125/125 green.
+
+The last two share one cause worth stating plainly: `withdraw()` is defended twice, by the
+transient guard *and* by correct effects-before-interactions ordering, and the reentrancy
+test only asserts that the nested call failed. Either defence alone satisfies it, so neither
+is actually protected. A future refactor that drops the modifier believing CEI is enough — or
+reorders the effect believing the modifier is enough — ships green.
+
+Also confirmed by mutation, on the other side of the ledger: deleting the `ChallengeWindowOpen`
+guard, making it off-by-one, widening `release`'s state check, crediting the wrong party on
+`cancel`, ignoring the transfer result, and re-disputing a Disputed milestone are all caught.
+The headline property is genuinely protected — by `ChallengeWindow.t.sol`, not by the
+invariants.
+
+Separately, the invariant suite had no stateful coverage of `release` at all: 0 successes in
+32,768 calls, because `approve` and `dispute` consumed every Attested milestone before a warp
+could ripen one. Repaired — a three-escrow cohort with staggered deadlines and ripeness-aware
+selection — and `release` now lands 13 successes per run, `reclaim` 15, with all twelve
+actions exercised. No invariant was weakened to get there.
+
+Evidence: 71 mutations across 3 sandboxes, 62 killed · survivors M1/M2/M3 re-verified against the full tree, each leaving `125 passed, 0 failed` · invariant COVER before → `release 21 0`, after → `release 60 13`, `reclaim 63 15` · suite green and `forge fmt --check` clean at every step
+Invalidates: the "dead branch in `cancel()`" line in `contracts/test/FINDINGS.md` and in T's 04:10Z entry — the branch is reachable and load-bearing. A should not simplify it.
+Files: contracts/test/Invariant.t.sol, contracts/test/handlers/EscrowHandler.sol
+
+## 2026-08-08T04:26Z · A · FIND
+**T's F-B is real, I reproduced it independently, and it makes a security claim I published
+earlier false.** Wrote a throwaway test against an isolated copy of `src/` rather than taking
+the report on trust. With `challengeWindow == 0`, one caller holding only the verifier
+signature calls `attest(passed=true)` and `release(0)` **in the same block**, and the
+freelancer withdraws. The client never gets a chance to `dispute()`. With a window of 90 s the
+identical sequence reverts on `release` and the client's objection still lands.
+
+**Retracting what I wrote at 03:42Z and in `web/.env.example`:** I said a leaked verifier key
+"can propose a passing milestone, and that is all — a pass does not move money." That holds
+only for `challengeWindow > 0`. At zero, the verifier key *is* unilateral authority over the
+client's funds — precisely the thing `Escrow.sol`'s own design note says must never happen.
+My D-3 entry waved at zero as "legal, means immediately-releasable, T-4's to test." That was
+the wrong reading: it is not an edge case, it is a reachable configuration in which the
+headline claim of the product is untrue.
+
+Two things made this hard to see and are worth naming. The zero-window behaviour is a
+*documented requirement* — `docs/03-CLAUDE-CODE.md` tells T-4 to prove it, and
+`ChallengeWindow.t.sol` does, correctly. And a UI that only offers 90 s upward never reaches
+it. Neither is a defence: the contract is the trust boundary, anyone can call `createEscrow`
+directly, and "our frontend wouldn't do that" is not a property of a contract.
+
+Also confirming **F-A** as an unambiguous bug: `EscrowFactory.getEscrows(offset, limit)` uses
+checked `offset + limit`, so a `type(uint256).max` "everything from here" sentinel panics
+`0x11` instead of clamping. One line, and the factory is the only index the frontend has.
+
+Not editing `contracts/src/**` yet. Standing rule from `docs/02-ALFA.md`: a contract change is
+announced to T and S **before** it happens, because it invalidates work in flight — here,
+`ChallengeWindow.t.sol`'s zero-window test and the line in `03-CLAUDE-CODE.md` that requires
+it. Decision goes up as D-7.
+Evidence: throwaway `FB.t.sol` in an isolated copy → `test_FB_ZeroWindow_VerifierDrainsInOneTx` passes (same-block attest+release+withdraw, 1 ether to freelancer, client never consulted); `test_FB_NonZeroWindow_ClientKeepsRecourse` passes (release reverts, dispute lands) · `src/` never touched
+Invalidates: my 03:42Z verifier-key risk claim, and the same wording in `web/.env.example`
+Blocks: **A-3 — do not deploy until D-7 is settled.** Deploying this and fixing it later means redeploying and re-verifying.
+Files: contracts/test/FINDINGS.md (T's report), CHANGELOG.md
+
+## 2026-08-08T05:30Z · A · DECIDE
+**F-A fixed in `EscrowFactory.getEscrows` — and it turns `Factory.t.sol` red on purpose.
+T-8 has a three-line change to make.**
+
+Clamp before adding instead of after:
+
+```solidity
+uint256 end = limit > total - offset ? total : offset + limit;
+```
+
+Safe because `offset <= total` is already enforced by the `BadRange()` guard on the line
+above. `getEscrows(1, type(uint256).max)` now returns a clamped page instead of panicking
+`0x11`. Verified in an isolated copy before touching `src/`: max-uint sentinel clamps at
+offset 0, 1 and `== length`; normal pages unchanged; `offset > length` still reverts
+`BadRange()`. Runtime size 15,759 → 15,771 B, margin still 8,805.
+
+**`test_RevertWhen_PaginationLimitOverflowsTheEndCalculation` now fails**, and that is the
+intended consequence — it pinned the panic. `contracts/test/**` is T's under C10 so A has
+not touched it, and T left precise instructions in the test's own docstring: update it to
+expect a clamped page or `BadRange()`, do not delete it, the boundary still needs covering.
+Lines 219 and 224 are the two `vm.expectRevert(stdError.arithmeticError)` calls to invert.
+
+One correction to the report, offered as calibration rather than criticism: FINDINGS.md says
+F-A is "not tested for", but `Factory.t.sol:209` does test it, deliberately and with a
+docstring anticipating this exact fix. The test was better than its own summary — worth
+knowing, because A nearly shipped the fix assuming nothing would go red.
+
+**Gate status: 121 of 122 passing, one red, and the red one is mine to have caused and T's to
+resolve.** G1 cannot flip until that test is inverted.
+Evidence: isolated `FA.t.sol` → clamps at offsets 0/1/length, `BadRange()` preserved, normal pages unchanged · full suite after the edit → `Ran 9 test suites: 121 passed, 1 failed` · the single failure is `test_RevertWhen_PaginationLimitOverflowsTheEndCalculation` · `forge fmt --check` clean
+Invalidates: `Factory.t.sol:209` — inverting it is the only work this creates
+Unblocks: T-20/T-22 may now use a max-uint "everything from here" sentinel safely
+Files: contracts/src/EscrowFactory.sol
+
+## 2026-08-08T05:58Z · A · DECIDE
+**D-4 reversed — hosted *and* clean-clone, not clean-clone only.** A judge gets a link they
+can click; `DEMO.md`'s local path stays valid, so nothing depends on one Vercel account
+staying up.
+
+**T needs to know two things.** The app now runs somewhere with real environment variables,
+which changes how `VERIFIER_PRIVATE_KEY` is handled — Next.js inlines every `NEXT_PUBLIC_`
+variable into the client bundle at build time, with no runtime check and no warning. A key
+pasted into a field named `NEXT_PUBLIC_VERIFIER_PRIVATE_KEY` is published to every visitor
+permanently, and rotating it afterwards does not un-publish the builds that already shipped.
+`deploy/VERCEL.md` has the scoping table and a one-line curl to prove the key is absent from
+the deployed bundle. And `web/` will eventually be the Vercel root — `vercel.json` currently
+points at `site/` and carries the exact config to swap in when T-18 lands.
+
+Shipped `site/` — a standalone static holding page, because `web/` has no application in it
+and a Vercel build today would produce nothing. It is deliberately **not** under `web/`:
+C10 gives `web/src/**` to Taskforce, and putting a placeholder there is how you get a
+collision the day their scaffold arrives.
+
+Content is the pitch rather than a "coming soon": the deadlock, the blank-page argument, and
+an interactive challenge-window widget that runs the whole mechanism — attest, watch the
+window, and either let it elapse or object — in about ten seconds with no chain and no
+wallet. Studio's C9 assets throughout, on `#09090b`. The status table is honest about what is
+built and what is not; claiming a finished product on a page that links to the repo would be
+found out in one click.
+
+One implementation note worth stealing: every local asset path is **relative** while the
+three Open Graph URLs are **absolute**. Scrapers are unreliable about resolving relative
+`og:image`, but relative paths are what let the same file render correctly opened straight
+off disk. Chrome's MCP tools refuse `file://`, so this page was verified structurally —
+every referenced asset resolves, tags balance, no secret in the output — rather than
+visually. That is a weaker check than a screenshot and it should be looked at once in a real
+browser before it is shared.
+Evidence: `vercel.json` parses, `outputDirectory: site`, framework `null` · publish set is 7 files / 260 KB, all under `site/` · verifier key absent from `site/` · all three referenced assets resolve · html tag balance checked on 9 element types
+Unblocks: a live link now; A-11 can record against it
+Invalidates: D-4's "no hosted deployment" — `DEMO.md` remains correct, but hosting is now in scope for T's env handling
+Files: site/index.html, site/assets/*, vercel.json, deploy/VERCEL.md
+
+## 2026-08-08T06:06Z · T · GATE
+**G1 flipped: contracts proven. T-1..T-9 done. A is unblocked for A-3.**
+
+    forge test          130 passed, 0 failed, 0 skipped   (10 suites)
+    forge build --sizes Escrow 10,252 B runtime (margin 14,324)
+                        EscrowFactory 15,771 B runtime (margin 8,805)
+    forge fmt --check   exit 0, whole tree
+
+Reproduce with `make setup && make gate` from a clean clone at the commit below.
+
+**The three commands are not the reason to trust this, so here is the reason.** A green suite
+proves the tests ran, not that they would notice a break. Everything was mutation-tested: the
+contract was deliberately broken in eight ways, one at a time in disposable copies, and the
+suite had to go red for each. **8 of 8 killed, 0 survivors**, with the baseline and the
+restored tree both back at 130 green either side of every mutation:
+
+| # | Break | Caught by |
+|---|---|---|
+| M1 | `cancel()`: drop the `Pending` guard, refund everything unconditionally | `test_CancelAfterAReclaimDoesNotRefundTheSameMilestoneTwice` |
+| M2 | `withdraw()`: zero the credit *after* the external call | `test_ReentrantWithdrawIsBlockedAndPaysOnce` |
+| M3 | `withdraw()`: remove `nonReentrant` | same test, different assertion |
+| M4 | `cancel()`: credit the freelancer instead of the client | 36 tests |
+| M5 | `dispute()`: allow re-disputing a Disputed milestone | `test_RevertWhen_DisputingAnAlreadyDisputedMilestone` |
+| M6 | `release()`: delete the challenge-window guard | `test_RevertWhen_ReleasingOneSecondBeforeWindowCloses` |
+| M7 | `withdraw()`: ignore the transfer result | `test_RevertWhen_RecipientRejectsTheTransfer` |
+| M8 | `getEscrows()`: clamp after adding, reintroducing the F-A overflow | `test_PaginationClampsTheMaxSentinelFromEveryOffset` |
+
+M1, M2 and M3 survived the suite two hours ago and are the reason G1 was not posted then.
+M2 and M3 mattered most: `withdraw()` is defended twice, by the transient guard *and* by
+effects-before-interactions, and the reentrancy test only asserted that the nested call
+failed — so either defence alone satisfied it and neither was protected. The attacker now
+records the credit it saw at re-entry and the raw revert data, so each defence has its own
+assertion and dies on its own mutation.
+
+**The invariant suite was repaired before this gate, not after.** As written it reported
+`release` succeeding **0 times in 32,768 calls** — the headline mechanism had no stateful
+coverage at all, while reading as though it did, because `approve` and `dispute` consumed
+every Attested milestone before a warp could ripen one. Now a three-escrow cohort with
+staggered deadlines and ripeness-aware selection: `release` 13 successes per run, `reclaim`
+15, all twelve actions exercised. No invariant was weakened to get there.
+
+**Two things A should know before deploying.**
+
+  - **This commit contains an edit to `contracts/src/EscrowFactory.sol` that A made and T
+    committed.** It is A's F-A fix — clamp before adding in `getEscrows`. It was sitting
+    uncommitted in the working tree, and since A's mount has no git it would never have
+    landed. G1 has to be reproducible from a commit, and a clean clone with the old factory
+    plus the new test is red, so leaving it out was not an option. **A must confirm the
+    committed text is what A intended**; it is in the diff at `contracts/src/EscrowFactory.sol`.
+    The runtime size moved 15,759 → 15,771 B, which is how T noticed the file had changed.
+  - **T's pagination test caught A's fix within minutes of it landing**, going red because it
+    pinned the old panic behaviour. It has been rewritten to assert the clamp from every
+    offset including `offset == length`. That is the seam working as intended, and it is also
+    the concrete argument for A re-running the gate rather than reading this entry: T and A
+    edited the same tree in the same window.
+
+Evidence: `forge test` → 130 passed, 0 failed, 0 skipped · `forge fmt --check` → exit 0 · `forge build --sizes` → both contracts under limit · 8/8 mutations killed, 0 survivors, verified independently against the full merged tree rather than per-batch
+Unblocks: **A-3** (deploy via Safe), and therefore A-4 → G2. A-16's relay is already proven, so the transport is not an unknown either.
+Invalidates: nothing in flight — C1's ABI is unchanged. `contracts/test/FINDINGS.md` still lists the open items on `src`; only F-A has been fixed.
+Files: contracts/test/*.t.sol, contracts/test/handlers/EscrowHandler.sol, contracts/test/helpers/Attackers.sol, contracts/src/EscrowFactory.sol (A's change, committed by T), TASKS.md

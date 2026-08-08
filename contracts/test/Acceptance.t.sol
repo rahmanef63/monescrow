@@ -295,6 +295,98 @@ contract AcceptanceTest is BaseTest {
         _assertEveryMilestone(e, Escrow.MState.Refunded, "milestone still refunded");
     }
 
+    /// Cancelling refunds only what is still unrefunded. An offer the freelancer never
+    /// took up still expires, and after the deadline the client may reclaim a milestone
+    /// out of it — that milestone's money has already been credited once. Cancelling
+    /// afterwards is still legal, and it must walk past that milestone rather than pay for
+    /// it a second time: an escrow that credits more than it holds cannot honour the
+    /// credit, and the client's own withdraw() would revert on a refund they are owed.
+    function test_CancelAfterAReclaimDoesNotRefundTheSameMilestoneTwice() public {
+        Escrow e = _newEscrow();
+        uint64 dl = e.deadline();
+
+        // Nobody ever accepted, the deadline arrives, and the client takes one milestone
+        // back the only way an unaccepted escrow allows.
+        vm.warp(dl);
+        vm.prank(client);
+        e.reclaim(0);
+
+        assertEq(uint256(_state(e, 0)), uint256(Escrow.MState.Refunded), "milestone 0 came back on the deadline");
+        assertEq(e.refundedAmount(), M0, "credited once, for exactly that milestone");
+        assertEq(e.owed(client), M0, "and only that milestone");
+
+        // cancel() is still open: nobody accepted, so the offer can still be withdrawn.
+        // Only the two milestones left standing may be handed back by it.
+        vm.expectEmit(true, false, false, true, address(e));
+        emit Escrow.Refunded(1, M1, "cancelled before acceptance");
+        vm.expectEmit(true, false, false, true, address(e));
+        emit Escrow.Refunded(2, M2, "cancelled before acceptance");
+        vm.expectEmit(true, false, false, true, address(e));
+        emit Escrow.Cancelled(client, TOTAL - M0);
+
+        vm.prank(client);
+        e.cancel();
+
+        assertTrue(e.cancelled(), "the offer was withdrawn");
+        assertEq(uint256(_state(e, 0)), uint256(Escrow.MState.Refunded), "the reclaimed milestone was left alone");
+        assertEq(uint256(_state(e, 1)), uint256(Escrow.MState.Refunded), "milestone 1 came back with the cancellation");
+        assertEq(uint256(_state(e, 2)), uint256(Escrow.MState.Refunded), "milestone 2 came back with the cancellation");
+
+        assertEq(e.refundedAmount(), TOTAL, "the job was refunded once over, not once and a bit");
+        assertEq(e.owed(client), TOTAL, "the client is credited the job exactly once");
+        assertEq(e.releasedAmount(), 0, "the freelancer never earned anything");
+        assertEq(e.owed(freelancer), 0, "and is credited nothing");
+        assertLe(e.owed(client), address(e).balance, "the escrow can cover everything it promised");
+
+        // The credit is payable, which is the point: a double-booked milestone would make
+        // this transfer ask for more than the contract holds.
+        uint256 balanceBefore = client.balance;
+        vm.prank(client);
+        e.withdraw();
+
+        assertEq(client.balance, balanceBefore + TOTAL, "the client got the whole job back, once");
+        assertEq(address(e).balance, 0, "escrow drained to the wei");
+        assertEq(e.owed(client), 0, "credit consumed");
+    }
+
+    /// The same guard at its limit: if the client reclaimed every milestone after the
+    /// deadline, a later cancel has nothing left to hand back. It must credit zero and say
+    /// so — not re-refund a job the client has already been credited for in full.
+    function test_CancelAfterEverythingWasReclaimedCreditsNothingMore() public {
+        Escrow e = _newEscrow();
+        uint64 dl = e.deadline();
+
+        vm.warp(uint256(dl) + 1 days);
+        vm.startPrank(client);
+        e.reclaim(0);
+        e.reclaim(1);
+        e.reclaim(2);
+        vm.stopPrank();
+
+        _assertEveryMilestone(e, Escrow.MState.Refunded, "milestone reclaimed at the deadline");
+        assertEq(e.refundedAmount(), TOTAL, "the whole job is already booked back");
+        assertEq(e.owed(client), TOTAL, "and already credited in full");
+
+        vm.expectEmit(true, false, false, true, address(e));
+        emit Escrow.Cancelled(client, 0);
+
+        vm.prank(client);
+        e.cancel();
+
+        assertTrue(e.cancelled(), "the empty offer was still withdrawable");
+        _assertEveryMilestone(e, Escrow.MState.Refunded, "milestone still refunded, unchanged");
+        assertEq(e.refundedAmount(), TOTAL, "no milestone was refunded a second time");
+        assertEq(e.owed(client), TOTAL, "the client's credit did not double");
+        assertLe(e.owed(client), address(e).balance, "the escrow can cover everything it promised");
+
+        uint256 balanceBefore = client.balance;
+        vm.prank(client);
+        e.withdraw();
+
+        assertEq(client.balance, balanceBefore + TOTAL, "paid out once, in full");
+        assertEq(address(e).balance, 0, "escrow drained to the wei");
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  HELPERS
     //////////////////////////////////////////////////////////////*/

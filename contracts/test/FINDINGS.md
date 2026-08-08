@@ -75,7 +75,14 @@ wrong reason. Taskforce will handle this in the UI rather than asking for a cont
 - **`termsHash` / `criteriaHash` may be zero**, so an escrow can exist with no agreement text
   behind it, while `accept()` is documented as agreeing to "the exact terms hashed at
   construction".
-- **Dead branch in `cancel()`** *(found three times)*: `if (m.state == MState.Pending)` can
+- **~~Dead branch in `cancel()`~~ — RETRACTED, the branch is reachable and load-bearing.**
+  Three Wave-1 authors called it dead; a mutation audit disproved it. `reclaim()` has no
+  `acceptedAt` guard, so a never-accepted escrow can already hold a `Refunded` milestone when
+  `cancel()` runs, and removing the guard double-credits the client past the escrow balance.
+  Left here rather than deleted, because "three agents agreed" was the reasoning that failed.
+  Original claim follows:
+
+  - **Dead branch in `cancel()`** *(found three times)*: `if (m.state == MState.Pending)` can
   never be false, because `cancel()` requires `acceptedAt == 0` and nothing leaves `Pending`
   before acceptance. Harmless, but it reads as though a partial refund were possible, which
   hides the real invariant from the next person to edit it.
