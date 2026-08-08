@@ -95,11 +95,11 @@ they flip G1.
 
 | ID | Task | State |
 |---|---|---|
-| T-10 | `checks/http.ts` + unit tests with injected `fetchImpl` | ⬜ |
-| T-11 | `checks/github.ts` — 403 rate-limit is **502, not a failure** | ⬜ |
-| T-12 | `report.ts` + `canonicalJson` + hashing (C5) | ⬜ |
-| T-13 | `sign.ts` EIP-712 (C2) + a test that the signature recovers to the expected address | ⬜ |
-| T-14 | `api/verify/route.ts` — 200/422/400/502 per C6 | ⬜ |
+| T-10 | `checks/http.ts` + unit tests with injected `fetchImpl` | ✅ |
+| T-11 | `checks/github.ts` — 403 rate-limit is **502, not a failure** | ✅ |
+| T-12 | `report.ts` + `canonicalJson` + hashing (C5) | ✅ |
+| T-13 | `sign.ts` EIP-712 (C2) + a test that the signature recovers to the expected address | ✅ |
+| T-14 | `api/verify/route.ts` — 200/422/400/502 per C6 | ✅ |
 
 **Wave 3 — AI parser (BYOK).**
 
@@ -113,7 +113,7 @@ they flip G1.
 
 | ID | Task | State |
 |---|---|---|
-| T-18 | Scaffold Next.js 16 + wagmi v3 + Tailwind; bump tsconfig target to ES2020 | ⬜ |
+| T-18 | Scaffold Next.js 16 + wagmi v3 + Tailwind; bump tsconfig target to ES2020 | 🔄 |
 | T-19 | `useTxFlow` — simulate → estimate → show cost → explicit click → send with gas limit | ⬜ |
 | T-20 | `/` my jobs from `escrowsOf(me)`, client and freelancer tabs | ⬜ |
 | T-21 | `/new` brief → draft → edit amounts and criteria → fund and create | ⬜ |

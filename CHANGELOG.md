@@ -1056,3 +1056,123 @@ commit `node_modules` — it is a dangling symlink A left in the repo root; dele
 Evidence: `git status` from A's mount → `warning: unable to unlink .git/index.lock: Operation not permitted`, 0 files staged
 Blocks: G2 — Vercel and the Safe deployment both read from `main`
 Files: — (repo-level)
+
+## 2026-08-08T06:52Z · A · DONE
+**`site/` is live at https://monescrow.vercel.app/ and verified in a real browser.** This
+closes the gap A flagged at 05:58Z — the page had only been checked structurally because
+Chrome's MCP tools refuse `file://`. Now checked properly against the deployment.
+
+All three branches of the challenge-window widget work: **attest** → amber bar, `ATTESTED`,
+"No money moved"; **let it elapse** → green, `RELEASED`, "anyone can now release the funds";
+**object mid-window** → red, `DISPUTED`, "release now reverts for everyone". That is the whole
+product argument, clickable, with no chain and no wallet.
+
+Checked and clean: both images load at full natural size (`logo.svg` 284×64,
+`challenge-window.png` 1920×1080), no console errors, no horizontal overflow, favicon
+resolves, `og:image` returns 200 at exactly 1200×630 with the immutable cache header from
+`vercel.json`, and the security headers are being applied (`nosniff`,
+`strict-origin-when-cross-origin`). Studio's three-timeline diagram is the strongest thing on
+the page — the traditional / naive-AI / propose-then-challenge comparison makes the argument
+faster than the prose above it does.
+
+**One thing I could not test and will not claim:** true mobile width. Chrome refuses to size
+its window below 653 px inner width, so the `(min-width: 620px)` breakpoint never flipped. The
+rule is present and correct in the CSSOM and the layout has no overflow at 653 px, but nobody
+has seen this page on a phone. Worth thirty seconds in devtools before it goes in a
+submission.
+
+One non-bug worth recording so it is not re-investigated: the progress bar can appear as a
+sliver in a screenshot taken just after release. `requestAnimationFrame` is throttled in a
+backgrounded tab, so the fill jumps to 100 % through its 0.25 s transition rather than
+sweeping. The state machine reads `Date.now()`, not frame count, so timing stays correct —
+only the animation is affected. Confirmed the released bar is genuinely at 100 % (543.3 px of
+544.7 px).
+
+Also noting the deployed status table already reads **130 tests across 10 suites, 8/8
+mutations caught** — T updated it and pushed. It will be briefly wrong the moment D-7 lands
+without the `ChallengeWindow.t.sol` fix, which is exactly why the handoff asked for the test
+first and the push second.
+Evidence: live at https://monescrow.vercel.app/ · three widget branches exercised by click · `document.images` both `complete && naturalWidth > 0` · `scrollWidth 638 ≤ innerWidth 653` · og.png → 200, image/png, 1200×630, 46 KB, `max-age=31536000, immutable` · response headers carry `nosniff` and `strict-origin-when-cross-origin` · zero console errors
+Unblocks: A-11 — the recording now has a live URL to open on camera
+Files: — (deployment)
+
+## 2026-08-08T06:40Z · T · DONE
+**Wave 2 done — T-10 through T-14, the verifier service. 183 tests, `tsc` clean,
+`next build` clean.** Pushed at `2aaa553`. Also on `main`: the holding page at
+`499ebde` (live and verified, below) and A's D-7 contract bound at `7685172`.
+
+**The module that is not in the brief, and why it exists.** `bind.ts`. The route receives
+`criteria` in the request body, and the contract **never sees criteria at all** — `attest`
+binds only `milestone`, `submission`, the on-chain `evidenceHash` and `reportHash`. So a
+hosted `/api/verify` holding the real key would sign a pass for anyone who supplied criteria
+they knew would succeed: an http check against a URL they control, real evidence, real
+submission. The signature would verify on-chain and the milestone would move to Attested.
+
+The challenge window still protects the money — that is the design working — but the
+attestation would mean nothing, and the endpoint would hand out meaningless attestations at
+scale. `bind.ts` reads `criteriaHash`, `evidenceHash`, `submissions` and `state` from the
+chain and refuses anything that does not match. The route runs it **before any fetch**, which
+is a second property: until binding passes, `criteria.http.url` is attacker-controlled, so a
+route that checked first would double as an unauthenticated request proxy pointed at anything
+the server can reach — including hosts only the server can reach.
+
+`attack.test.ts` is a separate adversarial suite written against the finished route rather
+than alongside it. Deleting the criteria comparison in `bind.ts` turns exactly its two attack
+tests red and nothing else, so the protection is real and the tests are what measures it.
+
+**422 and 502 stayed apart everywhere, which took more care than expected.** A site answering
+500 is a failing milestone and gets signed. Unreachable is ours and is never signed: DNS and
+socket failures, our own timeout firing, a body that cannot be read, GitHub 403/429 with a
+rate-limit signal (with `x-ratelimit-reset` echoed so a retry is informed), a 403 permissions
+wall on a private repo — we could not look, so we must not judge — and an RPC outage. Binding
+rejections are 400 rather than 422, deliberately: no check ran, and no retry will fix a
+request that does not match the chain.
+
+Three limitations recorded rather than papered over:
+
+  - **`FetchImpl` cannot see redirects.** `expectStatus: 200` passes on a URL that 301s
+    somewhere else entirely, and the report does not record that it happened. The seam has no
+    `redirect` option and no final-URL field. Not changed now because it touches the shared
+    type and three modules; the fix is `redirect: 'manual'` plus a final URL in `detail`, so
+    the arbiter reading the hashed report can see what was actually graded.
+  - **Rendered text is approximated by stripping tags**, not by running a browser, so nothing
+    injected by client-side JavaScript is visible to a `mustContain`. Stated in the code.
+  - An unclosed `<script>` drops the rest of the document, which can turn a `mustContain`
+    into a false failure on malformed HTML. It is the one approximation that errs against the
+    freelancer rather than the client, and it is flagged in the source.
+
+**None of this makes the checks strong, and the comments do not pretend otherwise.** `HTTP
+200` is satisfied by a blank page. That is exactly why a pass is a proposal.
+
+Evidence: `npx vitest run` → 183 passed, 8 files · `npx tsc --noEmit` → exit 0 · `npx next build` → compiled, `/api/verify` listed as a dynamic route · mutation: `if (false)` on the criteriaHash comparison in bind.ts → exactly 2 failures, both in attack.test.ts, restored to 14/14
+Unblocks: A can point a real verifier key at a real endpoint without it being a signing oracle. T-15..T-17 (the BYOK parser) are next.
+Files: web/src/lib/verify/**, web/src/app/api/verify/**, web/src/lib/canonicalJson.ts, web/vitest.config.mts, web/package.json, web/tsconfig.json, web/.gitignore, TASKS.md
+
+## 2026-08-08T06:40Z · T · HANDOFF
+**The holding page is live: https://monescrow.vercel.app — verified against the deployment,
+not against the local files.** Vercel was already connected to the repo, so the push
+deployed it.
+
+    content  serves the pushed commit, both corrections present
+    headers  X-Content-Type-Options, X-Frame-Options, Referrer-Policy — vercel.json applied
+    secrets  no 0x-hex, no sk-/ghp- token; the local VERIFIER_PRIVATE_KEY → 0 matches
+    assets   og.png, logo.svg, challenge-window.png, favicon.png all 200
+
+Safe to host as it stands, and the reason is structural rather than a clean scan: `site/` is
+static with no build step, no server function and no environment variable, so there is
+nothing for a misconfiguration to leak. `vercel.json` publishes one directory, so
+`contracts/`, `deploy/keys/` and `tools/relay/spool/` cannot be served.
+
+**Two facts on the page were corrected before publishing**, since a judge can check both:
+the suite is 130 tests (the page said 122; it is 133 now after D-7), and deployment is no
+longer "gated on the test suite" now that G1 is green — it is waiting on the Safe.
+
+**The risk arrives with the app, not with this page.** When `vercel.json` switches to the
+Next.js preset, `/api/verify` becomes a public endpoint holding `VERIFIER_PRIVATE_KEY`.
+`deploy/VERCEL.md` covers the `NEXT_PUBLIC_` inlining trap well and that guidance is right,
+but the endpoint itself was the larger exposure and is what `bind.ts` above now closes.
+Worth adding to that document before the switch.
+
+Evidence: `curl https://monescrow.vercel.app/` → 200, contains `130 tests across 10 suites`; header check as listed; asset probes 200 ×4; grep of the served HTML for the local key → 0 matches
+Unblocks: a link a judge can click, without waiting on A-4
+Files: — (reporting on a deployment; site/ and vercel.json were committed at 499ebde)
