@@ -1873,3 +1873,115 @@ The two Convex URLs need values only the human can read off the Convex dashboard
 deployment, which makes it strictly more dangerous than the verifier key.
 Evidence: `POST /api/v10/projects/monescrow/env` → 201, created `NEXT_PUBLIC_SITE_URL` · C8 amended with four rows and a scope limit
 Files: web/.env.example, deploy/vercel-env.example, docs/01-INTERFACES.md
+
+## 2026-08-08T09:34Z · A · HANDOFF
+**`/demo` — a presenter's console for the live talk, plus `/api/blank`, the adversarial demo's
+ammunition.** Three new files, nothing existing touched: `web/src/app/demo/page.tsx`,
+`web/src/app/demo/blank/page.tsx`, `web/src/app/api/blank/route.ts`. New routes cannot collide
+with T's in-flight work, which is why this was safe to add directly.
+
+Not a marketing page. It is the second screen you keep open while talking: three scenarios
+(happy path, the blank page, arbiter resolves), each broken into beats with the line to say and
+a **copy button beside every value you would otherwise have to find or retype** — the brief,
+the C3 criteria JSON, the C4 evidence JSON, the verifier address, the blank URL. Presentations
+fail on small things: a URL you cannot locate, an address you mistype, a wallet you forgot to
+switch. Every one of those is one click here.
+
+It also runs a **preflight on load** — build id, whether the verifier is configured, whether
+the blank endpoint is serving — so you find out the verifier is unset *before* you are standing
+in front of people, not during.
+
+**A mistake caught by building it rather than assuming.** The blank page was first written as
+`/demo/blank/page.tsx` returning `<html><body/></html>`. It compiled. It was still wrong twice
+over: a `page.tsx` nests inside the root `<html>`, and more importantly it inherits the root
+layout — so it would have shipped the nav, the dock and the providers. That still passes an
+`expectStatus: 200` check, but it is not *visibly* empty, and the demonstration's punch depends
+on the audience seeing there is genuinely nothing at the URL. Moved to a route handler at
+`/api/blank`, which has no layout around it. `/demo/blank` now just signposts.
+
+Verified rather than assumed: the served body is empty, and the criteria JSON handed out by the
+console parses as valid C3 with `mustContain: []` — which is precisely the field that makes a
+blank page pass and the whole argument work.
+
+**The design linter now scores 19 components, and it still fails on me too.** P3a 45%, P3b 3%.
+The new console did not make the ratios worse but did not fix them either — that needs the
+existing screens re-weighted, which is T's. A rule the author exempts himself from is not a
+rule, so it is worth saying plainly that `/demo` is inside the failing set.
+Evidence: `next build` → `/demo`, `/demo/blank`, `/api/blank` all compile static · `/api/blank` body empty · CRITERIA_HTTP parses as valid C3 · `design-lint` 5/7, 19 components
+Unblocks: A-11 — the recording now has a script and a preflight
+Files: web/src/app/demo/page.tsx, web/src/app/demo/blank/page.tsx, web/src/app/api/blank/route.ts
+
+## 2026-08-08T09:22Z · T · BLOCK
+**A P0 of my own making is fixed, the design lint is 7/7, C8's Convex limit is now a test —
+and the product's centre has no UI. That last one needs a decision.** `9fd1825`.
+
+**The P0 first, because I introduced it an hour ago.** Wiring BYOK, `POST /api/chat` forwarded
+the caller's `x-llm-model` unconditionally while the credential resolved separately — and with
+no `x-llm-key` that falls back to the server's `ANTHROPIC_API_KEY`. An anonymous
+`x-llm-model: deepseek` therefore resolved **our** key and posted it to `api.deepseek.com` as a
+bearer token. Also groq, xai, mistral, openrouter, google, github-models.
+
+The host gate I built in the same wave could not catch it, and this is the part worth keeping:
+`api.deepseek.com` **is** a legitimate registry host. The gate answers *may this key go to this
+URL*; the question that mattered was *whose key is this*. A host gate pins hosts, it does not
+decide ownership. The rule is consent, not URLs. Fixed, BYOK unchanged, and the decision is now
+one exported function with a regression test naming every vendor — reverting the guard turns
+seven of sixteen assertions red, which I proved by doing it rather than asserting it.
+
+**A — your design lint found real problems in my UI and I have fixed them.** 5/7 → **7/7**:
+`text-xs` from 48% of type declarations to 32%, display sizes from 2% to 6%, changing type
+classes only. Being handed a failing number beats being told the design is text-heavy.
+
+**But the lint cannot run on Windows**, which is why it had not been run against `web/src`
+before. `new URL('..', import.meta.url).pathname` yields `/C:/Users/…` with a leading slash, so
+`join` produces `\C:\Users\…` and it reports *"No such directory"*. Fix is
+`fileURLToPath(new URL('..', import.meta.url))`. Your file, so I ran a patched copy and left
+the original alone.
+
+**C8's Convex scope limit is executable now.** You wrote that pausing the deployment is the
+test; it was a paragraph. `web/src/lib/architecture.test.ts` walks the import graph from the
+six listing and action entry points and fails if anything reachable imports Convex, reads
+`NEXT_PUBLIC_CONVEX_*`, or swaps a chain read for a fetch. It prints the offending chain,
+because a rule nobody can debug gets deleted the first time it goes red. Proven to bite four
+ways. It passes today.
+
+**`web/CONVEX.md` is the wiring plan, not the wiring** — the deployment does not exist and
+there is no consumer yet to shape the interface around. It surfaced something that is yours,
+not mine: **`reportHash` is not in the `Milestone` struct.** It exists only in `attest`'s
+inputs, in `attestationDigest`, and in the `AttestationPassed`/`AttestationFailed` events, so
+no `eth_call` returns it. A client that fetches a report therefore cannot check it against
+chain state without `eth_getLogs`. Not a bug — C5 only ever promised the hash goes on-chain —
+but it decides how document integrity gets verified, so it is worth a look before G2 freezes
+the bytecode.
+
+---
+
+**The decision I need, and it is the biggest thing left.** `submit` and `attest` both render as
+**unbuildable** in `MilestoneCard` — `request: null`, with copy telling the user to use the
+assistant. The assistant's own card tells them to open the job page. It is a closed loop that
+leads nowhere.
+
+So the chain that makes this *this* product rather than a generic escrow —
+**submit evidence → run the check → relay the attestation → the window opens** — cannot be
+performed anywhere in the app. Everything either side of it works: create, accept, approve,
+release, dispute, reclaim, withdraw, all wired through `useTxFlow`. Your `/demo` page is the
+only thing in the tree that calls `/api/verify`, and it is a scripted demonstration rather than
+the product.
+
+Three screens' worth of work in my lane, and I have not started it because the standard the
+human just handed me says not to guess on significant scope. Asking rather than assuming:
+
+  1. an evidence form on a Submitted-able milestone that builds the C4 object, hashes it with
+     `hashJson`, and calls `submit(i, evidenceHash)`
+  2. a "Run the check" action that POSTs criteria + evidence to `/api/verify`
+  3. relaying the returned signature through `attest`, which anyone may call — the property the
+     pitch leans on hardest and which nothing currently exercises
+
+**Lane note, said once and without complaint:** `web/src/app/demo/**` and `web/src/app/api/blank/`
+are yours and I committed them for you after reading them for secrets. They are good — the blank
+page passing an HTTP 200 check is the argument made concrete. Worth knowing that the design-lint
+score is now a shared number: mine alone is 70/211 `text-xs`, and `/demo` moves it.
+
+Evidence: `npx vitest run` → 743 passed, 23 files · `npx tsc --noEmit` → exit 0 with `.next` deleted · `npx next build` clean · design lint 7/7 · guard reverted → 7 of 16 key-routing assertions red, restored → 16/16 · `grep -rn "api/verify" web/src` returns only `app/demo/page.tsx`
+Blocks: nothing of A's. G2 is unaffected. The submit/verify/attest gap blocks a judge performing the happy path in the app rather than watching it.
+Files: web/src/** (type classes, the key-routing guard), web/src/lib/architecture.test.ts, web/src/app/api/chat/key-routing.test.ts, web/CONVEX.md
