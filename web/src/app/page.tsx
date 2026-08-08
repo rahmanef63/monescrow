@@ -22,6 +22,9 @@
 
 import { useMemo, useState } from 'react'
 import { EmptyState } from '@/components/EmptyState'
+import { Group, GroupNote, Pill, Row, Segmented } from '@/components/ios'
+import { formatDuration, formatMon, sameAddress, shortAddress } from '@/lib/chain'
+import { MSTATE } from '@/lib/chat/types'
 import {
   JobCard,
   SAMPLE_VIEWER,
@@ -29,7 +32,6 @@ import {
   type JobWithOwed,
   type MyJobs,
 } from '@/components/JobCard'
-import { shortAddress } from '@/lib/chain'
 import { roleOf } from '@/lib/chat/permissions'
 import type { Role } from '@/lib/chat/types'
 
@@ -45,6 +47,60 @@ const TAB_BLURB: Record<Tab, string> = {
   client: 'Jobs you funded. You approve, you dispute, and you reclaim after the deadline.',
   freelancer: 'Jobs you were hired for. You accept, you submit, and you withdraw what you are owed.',
   arbiter: 'Jobs that named this wallet as the arbiter. You only act once a milestone is frozen.',
+}
+
+
+/* ------------------------------------------------------------------ *
+ * One job, as one row
+ * ------------------------------------------------------------------ */
+
+/**
+ * A list row shows the job and the single most urgent true thing about it — not five fields.
+ *
+ * A card could afford to show everything; a row cannot, and that constraint is useful. What a
+ * person scanning their jobs needs is: which job, how much, and is anything waiting. Everything
+ * else is one tap away on the job page, which is where the detail belongs.
+ *
+ * `drain` is the signature: a live challenge window shrinks the row separator toward zero, so a
+ * list of jobs shows at a glance which clocks are running out without a single extra element.
+ */
+function jobRow(job: JobWithOwed, viewer: string | null, now: number) {
+  const total = job.milestones.length
+  const closed = job.milestones.filter((m) => m.state === MSTATE.Released || m.state === MSTATE.Refunded).length
+
+  const counterparty = sameAddress(job.client, viewer) ? job.freelancer : job.client
+  const title = job.untrusted.title.trim() || `Escrow ${shortAddress(job.escrow)}`
+
+  // The most urgent milestone decides the row: a running window beats a dispute beats waiting.
+  const attested = job.milestones.filter((m) => m.state === MSTATE.Attested && m.releasableAt > 0)
+  const soonest = attested.sort((a, b) => a.releasableAt - b.releasableAt)[0]
+  const disputed = job.milestones.some((m) => m.state === MSTATE.Disputed)
+
+  let value: React.ReactNode = `${formatMon(job.totalAmount)} MON`
+  let drain: number | undefined
+
+  if (job.cancelled) {
+    value = <Pill tone="neutral">Cancelled</Pill>
+  } else if (disputed) {
+    value = <Pill tone="danger">Disputed</Pill>
+  } else if (soonest) {
+    const left = soonest.releasableAt - now
+    if (left > 0 && job.challengeWindow > 0) {
+      drain = left / job.challengeWindow
+      value = <Pill tone="warn">{formatDuration(left)} left</Pill>
+    } else {
+      value = <Pill tone="ok">Releasable</Pill>
+    }
+  } else if (closed === total && total > 0) {
+    value = <Pill tone="ok">Done</Pill>
+  }
+
+  return {
+    label: title,
+    detail: `${shortAddress(counterparty)} · ${closed}/${total} milestones · ${formatMon(job.totalAmount)} MON`,
+    value,
+    drain,
+  }
 }
 
 export default function JobsPage() {
@@ -80,12 +136,8 @@ export default function JobsPage() {
 
   return (
     <div className="min-w-0">
-      <header className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Jobs</h1>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-          Every escrow this wallet is party to. Which side of a job you are on is worked out from
-          your address — nothing here asks you to pick a role.
-        </p>
+      <header className="min-w-0 pt-1 pb-1">
+        <h1 className="text-[34px] leading-tight font-bold tracking-[-0.02em] text-zinc-50">Jobs</h1>
       </header>
 
       <SourceNotice state={state} />
@@ -144,40 +196,16 @@ export default function JobsPage() {
         />
       ) : (
         <>
-          {/* ---------------------------------------------------------------- role tabs */}
-          <div
-            className="mt-5 flex min-w-0 gap-2 overflow-x-auto pb-1"
-            role="group"
-            aria-label="Filter jobs by the side you are on"
-          >
-            {tabs.map((t) => {
-              const active = t === tab
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setChosen(t)}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-colors ${
-                    active
-                      ? 'border-accent/60 bg-accent/15 text-zinc-100'
-                      : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-100'
-                  }`}
-                >
-                  {TAB_LABEL[t]}
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-xs tabular-nums ${
-                      active ? 'bg-accent/25 text-zinc-100' : 'bg-zinc-800 text-zinc-400'
-                    }`}
-                  >
-                    {buckets[t].length}
-                  </span>
-                </button>
-              )
-            })}
+          <div className="mt-4">
+            <Segmented
+              label="Which side of a job you are on"
+              value={tab}
+              onChange={setChosen}
+              options={tabs.map((t) => ({ value: t, label: TAB_LABEL[t], count: buckets[t].length }))}
+            />
           </div>
 
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">{TAB_BLURB[tab]}</p>
+          <GroupNote>{TAB_BLURB[tab]}</GroupNote>
 
           {shown.length === 0 ? (
             <EmptyState
@@ -193,11 +221,24 @@ export default function JobsPage() {
               }
             />
           ) : (
-            <ul className="mt-4 flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4 xl:grid-cols-3">
-              {shown.map((job) => (
-                <JobCard key={job.escrow} job={job} viewer={renderViewer} now={now} />
-              ))}
-            </ul>
+            <div className="mt-4">
+              <Group>
+                {shown.map((job, i) => {
+                  const r = jobRow(job, renderViewer, now)
+                  return (
+                    <Row
+                      key={job.escrow}
+                      href={`/job/${job.escrow}`}
+                      label={r.label}
+                      detail={r.detail}
+                      value={r.value}
+                      drain={r.drain}
+                      last={i === shown.length - 1}
+                    />
+                  )
+                })}
+              </Group>
+            </div>
           )}
 
           {strangers > 0 ? (
