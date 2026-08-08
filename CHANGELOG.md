@@ -1425,3 +1425,212 @@ set to `web`. Alfa is not touching either again. The only thing Alfa will edit n
 Evidence: Monadscan tx `0xa6051243…` → 50 MON transfer, Success, block 51855065 · address page shows an EOA with `execTransaction` history against `0x7D9f9957…` · `git grep` finds the EOA in no tracked file · `git check-ignore` confirms `deploy/keys/**` ignored
 Unblocks: A-2 → A-3 → A-4 → G2, once the deployer is funded and the Safe is deployed
 Files: deploy/RUNBOOK.md, deploy/keys/** (ignored)
+
+## 2026-08-08T08:22Z · A · FIND
+**Vercel env audit: zero variables are configured, and two of the ones the code needs were
+never in C8.** Audited against what `web/src` actually reads rather than against the spec,
+which is what turned up the divergence.
+
+The Environment Variables page is empty — "No Environment Variables Added". Consequences once
+the app is the deploy target:
+
+| Missing | Effect |
+|---|---|
+| `VERIFIER_PRIVATE_KEY` | `/api/verify` returns **502** "the verifier signing key is not available; this is our configuration" |
+| `MONAD_RPC_URL` | `/api/verify` returns **502** "the verifier has no RPC endpoint configured" |
+| `NEXT_PUBLIC_FACTORY_ADDRESS` | `hasFactory()` false → the honest "nothing was ever asked" empty state |
+| `NEXT_PUBLIC_VERIFIER_ADDRESS` | UI cannot name who signed an attestation |
+
+**C8 amended.** `MONAD_RPC_URL` and `NEXT_PUBLIC_SITE_URL` are read by the code and were absent
+from the table. The first is the substantive one: C8 offered only
+`NEXT_PUBLIC_MONAD_TESTNET_RPC`, and T used a **server-side** variable for the verify route
+instead. T was right and C8 was wrong — the verifier's RPC is not the browser's, and a server
+route has no business reading a `NEXT_PUBLIC_` value. Amended the spec to match the code rather
+than bending the code back to a frozen table. Recording it because C8 is 🔒 and a change to it
+is supposed to be announced, which this now is.
+
+**A design detail worth copying elsewhere:** env is read *inside the request handler*, not at
+module scope. So a deploy with no secrets at all still builds, still serves every page, and
+fails only on the one route that needs the key — with an error naming the variable, and
+phrased as "this is our configuration". That is C6's 422-vs-502 distinction — *their* failure
+versus *our* failure — holding at the config layer rather than only in the check logic.
+
+**Two of these are mine to prepare and not mine to enter.** I will not paste
+`VERIFIER_PRIVATE_KEY` into a web form; handling a private key in plain text is off-limits
+regardless of who asks. It is in `web/.env.local`. The public values are in
+`deploy/VERCEL.md`, ready to copy.
+Evidence: Vercel Settings → Environment Variables → "No Environment Variables Added" · `grep process.env web/src` → 13 distinct vars · `loadVerifierKey(process.env)` at `api/verify/route.ts:216`, `MONAD_RPC_URL` at :222 · both guarded by `json(502, …)` at request time
+Unblocks: nothing yet — but the app is non-functional beyond empty states until these are set
+Files: deploy/VERCEL.md, docs/01-INTERFACES.md (C8 amended)
+
+## 2026-08-08T08:35Z · A · FIND
+**The first Vercel build that actually tried to run Next failed, and it was A's fault.**
+`27b6875` errored after 16 s — the first non-trivial build duration this project has seen, all
+previous ones being 1–2 s static copies:
+
+```
+No Next.js version detected. Make sure your package.json has "next" in either
+"dependencies" or "devDependencies". Also check your Root Directory setting
+matches the directory of your package.json file.
+```
+
+Root cause: **A set Root Directory to `web` and the save did not take.** Verified by reading
+the field back — it was empty. With Root Directory blank and `framework: "nextjs"`, Vercel
+looks for `package.json` at the repository root, where there is none, and fails exactly this
+way. Re-set it and confirmed by reading the value back this time: `web`, saved.
+
+Lesson worth keeping: **that panel has three independent Save buttons**, and clicking the one
+belonging to a different section silently discards the field you just edited. Read the value
+back after saving rather than trusting the toast — the toast that appeared said "Build and
+development settings updated", which was true of a *different* section.
+
+Also flagging a live conflict this created, now resolved. T's root `vercel.json` does
+`cd web && npm install` / `outputDirectory: web/.next`, which assumes Root Directory is
+**blank**. `web/vercel.json` assumes it is **`web`**. Both cannot be right. With Root Directory
+now `web`, Vercel reads `web/vercel.json` and ignores the root file — so T's `web/vercel.json`
+wins and the root one is inert. Nothing of T's needed editing, which is the outcome A was
+aiming for.
+
+Separately, credit where due: `27b6875` is titled "Make typecheck work on a clean clone" — T
+fixed the `LayoutProps` ordering bug from the 06:58Z FIND.
+Evidence: build `27b6875` → Error, 16 s, "No Next.js version detected" · Root Directory field read back as empty before the fix, `web` after
+Files: — (project settings)
+
+## 2026-08-08T08:36Z · A · HANDOFF
+**`deploy/vercel-env.example` — every environment variable the deployed app needs, split by
+who may paste it.**
+
+Public and safe for anyone to set: `NEXT_PUBLIC_VERIFIER_ADDRESS` (the A-1 signer),
+`MONAD_RPC_URL` and `NEXT_PUBLIC_MONAD_TESTNET_RPC` (both `https://testnet-rpc.monad.xyz`),
+`NEXT_PUBLIC_FACTORY_ADDRESS` (blank until A-4), `NEXT_PUBLIC_PARA_API_KEY` (optional).
+
+Secrets the human pastes, never A: `VERIFIER_PRIVATE_KEY` from `web/.env.local`, plus optional
+`GITHUB_TOKEN` and `ANTHROPIC_API_KEY`. Handling a private key in plain text is off-limits for
+A regardless of who asks, so that one field stays yours.
+
+Leave unset on Vercel: `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_BUILD_ID` both fall back to
+values Vercel injects (`VERCEL_URL`, `VERCEL_DEPLOYMENT_ID`). Setting them by hand only creates
+a second thing that can drift.
+
+The file carries the one-line check that matters after the first deploy — grep the served HTML
+for the key and confirm it prints 0.
+Evidence: derived from `grep process.env web/src`, 13 distinct vars, cross-checked against the amended C8
+Unblocks: the deployed app doing anything beyond empty states
+Files: deploy/vercel-env.example
+
+## 2026-08-08T08:31Z · A · GATE
+**The app is live. https://monescrow.vercel.app/ now serves the real Next.js build, not the
+holding page.** 45.5 s build — the first genuine `next build` this project has deployed, every
+previous one having been a 1–2 s static copy of `site/`.
+
+**Root cause of the whole saga: the Vercel UI silently discarded the Root Directory save,
+twice.** The field read back as `web` in the DOM and a success toast appeared, but
+`GET /api/v9/projects/monescrow` returned `rootDirectory: null` both times. The toast belonged
+to a *different* section — that settings panel has three independent Save buttons and clicking
+the wrong one discards the field you just edited without saying so.
+
+Fixed by setting it through the API instead of the form:
+
+```js
+await fetch('/api/v9/projects/monescrow?teamId=…', {
+  method:'PATCH', headers:{'content-type':'application/json'},
+  body: JSON.stringify({ rootDirectory: 'web' })
+})   // → 200, rootDirectory: "web"
+```
+
+**The general lesson, and it is the same one as the `26ms` build:** read the state back from
+the source of truth rather than trusting the confirmation. A toast is a claim; the API
+response is evidence. Two hours of "the deployment never moved" came down to believing a
+success message.
+
+With Root Directory now `web`, Vercel reads `web/vercel.json` and the root file is ignored
+entirely — which is exactly the arrangement T described in `dcb6820`. Neither of T's files
+needed editing.
+
+**Environment variables set** (public only): `NEXT_PUBLIC_VERIFIER_ADDRESS`, `MONAD_RPC_URL`,
+`NEXT_PUBLIC_MONAD_TESTNET_RPC`. `VERIFIER_PRIVATE_KEY` deliberately not set by A — a private
+key in plain text is off-limits regardless of who asks, so `/api/verify` will 502 with its
+named configuration error until the human pastes it.
+
+**What a visitor sees now**, and it is exactly the honest thing the code was written to do:
+a banner reading *"No escrow factory is configured yet… anything you see is sample data, not
+the chain"*, then three sample job cards demonstrating challenge-window, waiting-on-you and
+frozen-disputed states, with a footer naming the sample address and stating no button will
+send a transaction. Nothing pretends to be onchain. That is a better first impression than the
+holding page because it shows the product working while refusing to imply it is live.
+Evidence: deployment READY in 45,483 ms · served HTML contains `/_next/` · `rootDirectory: "web"` confirmed via `GET /api/v9/projects` after the PATCH · three env vars listed in the dashboard
+Unblocks: A-5 becomes a one-field change once G2 lands — set `NEXT_PUBLIC_FACTORY_ADDRESS` and the sample data is replaced by the chain
+Files: — (project settings)
+
+## 2026-08-08T08:34Z · T · BLOCK
+**Four agents ran the judge path end to end from a fresh clone of `origin/main`. 47 findings,
+11 of them blockers.** Three were mine and are fixed at `81127e2`. The rest are in A-owned
+files and are listed here rather than edited, because A is active and a silent edit to a file
+someone is holding is how this goes wrong.
+
+**Two I re-verified by hand before reporting, because both are the kind of claim that should
+not travel on someone else's word.**
+
+**1 · `make repro` prints a fake proof, and it is the command DEMO.md hands a judge to check
+the deployment is honest.** `jq -r … | sha256sum` puts jq's failure on the *left* of a pipe,
+so when jq is missing the pipeline still exits 0 and `sha256sum` hashes an empty stream.
+`jq` is **not installed on this machine** and is not in DEMO.md's requirements table. Measured:
+both contracts print `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, which
+is exactly the sha256 of empty input. Two identical plausible hashes, and if the `cast code`
+side also fails they "match". A judge told *"do not take verified-on-the-explorer on faith"*
+gets a proof of nothing that looks like a proof of everything. Fix: add `jq` to the
+requirements, and guard the recipe —
+`@command -v jq >/dev/null || { echo 'repro needs jq'; exit 1; }`.
+
+**2 · RUNBOOK's init-code hash is two contract changes stale, and step 3 tells the signer to
+refuse anything that does not match it.** `deploy/RUNBOOK.md:20` and `:87` say 15,787 B /
+`0xfa55d0d3…`. Measured from this checkout: **15,948 B**, and `forge build --sizes` agrees
+(EscrowFactory initcode 15,948). The `getEscrows` clamp and D-7 both changed it. On deploy day
+the human follows the runbook, the hash does not match, and they correctly refuse to sign a
+**correct** deployment — or assume the relay is broken and go looking in the wrong place. Fix:
+replace both literals with "whatever `make initcode` prints from this checkout", so it cannot
+go stale a third time. The `contracts/Makefile:57` comment records `0013af7e…` / `fdd957ca…`
+for the same reason and is also wrong.
+
+**The rest of the blockers, all in A-owned documents:**
+
+  - **`DEMO.md:46` says `.env.example` already contains the deployed factory address.** It is
+    empty, because nothing is deployed. Every one of the nine happy-path steps is unreachable.
+    This is the first sentence a judge tests.
+  - **`DEMO.md:3` says "There is no hosted deployment."** Three other documents and the live
+    site say otherwise; D-4 was reversed today.
+  - **Every command in DEMO.md's setup is a `make` target and there is no `make` on Windows.**
+    README gives a fallback for `setup` and `test` only — none for `gate`, `repro`, `initcode`
+    or `probe-evm`. All four work run directly; they just are not written down.
+  - **`README.md:260` says the gate passes 12/12.** It passes **133**. `site/index.html`
+    already says 133, so two judge-facing documents disagree about the same command.
+
+**Two overstatements on the live page worth taking seriously, because they are the exact
+things a hostile judge attacks:**
+
+  - The demo widget flips to `RELEASED` when the bar fills, and the copy reads as though money
+    arrived. On chain `Released` credits an internal balance; `withdraw` is a separate call the
+    recipient makes. Every other surface we own says so — the page that argues the pitch should
+    not be the one that blurs it.
+  - *"The design survives a weak check because it never depended on the check being strong."*
+    It does not remove the dependency, it **moves** it — onto the client noticing within the
+    window. That is a genuinely strong claim and it is defensible as stated; the current
+    wording is not, and it is one question away from being taken apart.
+
+**And one drift in a frozen file:** `docs/01-INTERFACES.md`'s C1 table has no row for
+construction, so D-7's `MIN_CHALLENGE_WINDOW`/`MAX_CHALLENGE_WINDOW` preconditions exist in the
+contract and in my tests but not in the interface contract that is supposed to be the seam. C1
+is 🔒, so that is A's to change or explicitly decline.
+
+**What I fixed, all in `web/` (`81127e2`):** `api/verify` read only `MONAD_RPC_URL`, a variable
+in no `.env.example` and no document, so a clean clone got an unconditional 502 from the
+endpoint the whole argument rests on — it now falls back to the public RPC and needs no
+configuration. The job page rendered `Math.round(seconds/3600)`, showing **"0 hours per
+milestone"** for the 90-second preset, on the header of the screen the camera is on for the
+entire countdown. And `VERIFIER_PRIVATE_KEY` was documented as optional when without it the
+"Run check" step does nothing; `.env.example` now carries the two commands to generate one,
+next to the blank rather than in a document you might not read.
+
+Evidence: `jq` absent → `printf '' | sha256sum` equals the hash `make repro` prints for both contracts · `forge script --sig initCode() --offline` → 15,948 bytes vs RUNBOOK's 15,787 · `forge test` → 133 passed vs README's 12/12 · `web/.env.example:15` `NEXT_PUBLIC_FACTORY_ADDRESS=` empty · clean-clone `npm run typecheck` now exits 0 with no `.next` present · 677 web tests, tsc and build clean at 81127e2
+Blocks: G4. None of this blocks G2 — the deploy path itself is sound apart from the stale hash in the runbook, which blocks it on deploy day rather than now.
+Files: reporting on contracts/Makefile, deploy/RUNBOOK.md, DEMO.md, README.md, deploy/VERCEL.md, docs/01-INTERFACES.md, site/index.html — none of them edited
