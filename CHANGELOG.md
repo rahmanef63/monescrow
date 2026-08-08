@@ -2132,3 +2132,35 @@ repo — any of which blows up to 256 px for projecting. It is the one screen wh
 can act, so it sits above the script rather than below it.
 Evidence: module-by-module comparison against `qrcode` → 13/302/13 mismatches, encoder rejected · four SVGs generated and committed · `next build` clean, `/demo` static · design lint still 7/7 (245 declarations)
 Files: web/src/lib/qr.ts, web/public/qr/*.svg, web/src/app/demo/page.tsx
+
+## 2026-08-08T10:58Z · S · HANDOFF
+S-11 complete: an animated seven-slide HTML pitch deck now compresses the MonEscrow story
+into the three-minute judging window. It uses the existing progress-lock brand and the final
+three-phone Docked Workflow visual, with staged reveals for the client veto, shared challenge
+state, freelancer deadline, five contract steps, and trust boundaries. The file is plain HTML,
+CSS, and JavaScript with no framework or network dependency.
+Evidence: local HTTP response 200; seven slides; keyboard, click-zone, swipe, fullscreen,
+restart, elapsed timer, and presenter-notes controls exercised in-browser; every reveal state
+reached; 1600x900 visual inspection completed; browser console returned 0 errors and 0
+warnings after final reload.
+Unblocks: the human presenter can deliver the full pitch from one file and hand off directly
+to the three live phone screens without switching visual systems.
+Invalidates: the earlier assumption that the static nine-PNG deck is the only presentation
+surface; it remains the fallback/recording source, while this HTML deck is now the live deck.
+Files: TASKS.md, assets/deck/MonEscrow-Pitch.html,
+assets/ui-concepts/three-phone-demo-revised/option-3.png
+
+## 2026-08-08T11:04Z · S · DONE
+The animated pitch is now a self-contained directory rather than an HTML file that reaches
+into sibling asset trees. Copied the wordmark, mark, and three-phone visual into `assets/deck/`
+and changed every runtime image reference to a same-directory filename. This removes the
+deployment assumption that `assets/brand/` and `assets/ui-concepts/` are published beside the
+deck.
+Evidence: `MonEscrow-Pitch.html`, `logo.svg`, `logo-mark.svg`, and `three-phone-demo.png` each
+returned HTTP 200 from the local static server; HTML scan found 0 parent-directory (`../`)
+references and exactly four local image usages.
+Unblocks: publishing or copying only `assets/deck/` to a static host without broken visuals.
+Invalidates: the previous output bundle structure that required parallel `brand/` and
+`ui-concepts/` directories.
+Files: assets/README.md, assets/deck/MonEscrow-Pitch.html, assets/deck/logo.svg,
+assets/deck/logo-mark.svg, assets/deck/three-phone-demo.png

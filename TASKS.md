@@ -157,6 +157,7 @@ the pattern in `models-rahmanef-com` (a multi-tenant BYOK model registry).
 | S-8 | Demo review — first 90 seconds | ⬜ | A-11 |
 | S-9 | Public try-it placeholder + transparent PNG/WebP motion handoff | ✅ done | S-2 |
 | S-10 | Pitch speaker notes + A-11 recording shot-list handoff | ✅ done | S-5, D-3 |
+| S-11 | Animated 16:9 HTML pitch deck with step reveals and three-phone UI | ✅ done | S-5, S-10 |
 
 ---
 

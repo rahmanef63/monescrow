@@ -32,6 +32,10 @@ Both illustrations are designed to sit directly on `#09090b`. They intentionally
 - `deck/07-why-monad.png`
 - `deck/08-product-states.png`
 - `deck/09-close.png`
+- `deck/MonEscrow-Pitch.html` - animated seven-slide live pitch; all runtime assets are colocated in `deck/`
+- `deck/logo.svg` - local deck wordmark copy
+- `deck/logo-mark.svg` - local deck mark copy
+- `deck/three-phone-demo.png` - local deck UI mockup copy
 
 Every deck image is 1920 x 1080.
 

@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MonEscrow — Silence pays. Objection pauses.</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: #18181b;
+      --border: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --purple: #836ef9;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --ease: cubic-bezier(.22, 1, .36, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: #030304;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font: inherit; }
+
+    .deck {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 110%, rgba(131, 110, 249, .12), transparent 34%),
+        #030304;
+    }
+
+    .stage {
+      position: relative;
+      width: min(100vw, calc(100vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: var(--bg);
+      box-shadow: 0 40px 120px rgba(0, 0, 0, .7);
+      container-type: inline-size;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      padding: 6.25cqw 7.1cqw 5.2cqw;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(3.5%);
+      transition: opacity .5s var(--ease), transform .75s var(--ease), visibility 0s .75s;
+      background: var(--bg);
+      isolation: isolate;
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: 3.75cqw 3.75cqw;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.45), transparent 80%);
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+      transition-delay: 0s;
+    }
+
+    .slide.exit { transform: translateX(-3.5%); }
+
+    .brand {
+      position: absolute;
+      top: 2.1cqw;
+      left: 3.2cqw;
+      width: 9.6cqw;
+      height: auto;
+      z-index: 12;
+    }
+
+    .eyebrow {
+      margin: 0 0 1.1cqw;
+      color: var(--purple);
+      font-size: 1.05cqw;
+      font-weight: 750;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 1.5cqw;
+      font-size: clamp(42px, 5.1cqw, 98px);
+      line-height: .98;
+      letter-spacing: -.055em;
+      max-width: 12ch;
+    }
+
+    h2 {
+      margin-bottom: 1.15cqw;
+      font-size: clamp(34px, 3.45cqw, 66px);
+      line-height: 1.02;
+      letter-spacing: -.045em;
+      max-width: 17ch;
+    }
+
+    .lede {
+      max-width: 31ch;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(18px, 1.55cqw, 30px);
+      line-height: 1.45;
+    }
+
+    .accent { color: var(--purple); }
+    .success { color: var(--green); }
+    .warning { color: var(--amber); }
+    .danger { color: var(--red); }
+
+    .step {
+      opacity: 0;
+      transform: translateY(1.3cqw);
+      filter: blur(5px);
+      transition: opacity .55s var(--ease), transform .7s var(--ease), filter .55s ease;
+    }
+
+    .step.shown {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+
+    .hero-copy { align-self: center; z-index: 3; }
+
+    .hero-visual {
+      position: absolute;
+      top: 8.2%;
+      right: -4%;
+      width: 66%;
+      height: 88%;
+      overflow: hidden;
+      border-radius: 2.4cqw 0 0 2.4cqw;
+      border: 1px solid rgba(255,255,255,.1);
+      box-shadow: -2cqw 2cqw 7cqw rgba(0,0,0,.72);
+      transform: perspective(1100px) rotateY(-4deg) rotateZ(-.25deg);
+    }
+
+    .hero-visual img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 50%;
+    }
+
+    .hero-visual::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, var(--bg) 0%, transparent 22%, transparent 78%, rgba(9,9,11,.2));
+      pointer-events: none;
+    }
+
+    .proofline {
+      display: flex;
+      gap: 1.6cqw;
+      margin-top: 2.2cqw;
+      color: var(--muted);
+      font-size: .92cqw;
+    }
+
+    .proofline span { display: inline-flex; align-items: center; gap: .55cqw; }
+    .proofline i { width: .42cqw; height: .42cqw; border-radius: 50%; background: var(--green); box-shadow: 0 0 1cqw rgba(52,211,153,.5); }
+
+    .problem-grid {
+      align-self: center;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 2.6cqw;
+      align-items: center;
+      margin-top: 1.4cqw;
+    }
+
+    .fear {
+      min-height: 19cqw;
+      padding: 2.4cqw;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: linear-gradient(135deg, rgba(255,255,255,.025), transparent);
+    }
+
+    .fear strong { font-size: 2.25cqw; line-height: 1.08; letter-spacing: -.04em; }
+    .fear p { max-width: 23ch; color: var(--muted); font-size: 1.18cqw; line-height: 1.5; }
+    .role { color: var(--purple); font-size: .85cqw; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .versus { color: var(--border); font-size: 2cqw; font-weight: 700; }
+
+    .deadlock {
+      position: absolute;
+      left: 50%;
+      bottom: 6.2cqw;
+      transform: translateX(-50%);
+      color: var(--amber);
+      font-size: 1.05cqw;
+      letter-spacing: .02em;
+    }
+
+    .comparison {
+      align-self: center;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.6cqw;
+      margin-top: 1.8cqw;
+    }
+
+    .lane {
+      position: relative;
+      min-height: 23cqw;
+      padding: 2.1cqw 1.8cqw;
+      border: 1px solid var(--border);
+      background: rgba(24,24,27,.72);
+      overflow: hidden;
+    }
+
+    .lane.focus {
+      border-color: rgba(131,110,249,.72);
+      box-shadow: inset 0 0 0 1px rgba(131,110,249,.25), 0 0 4cqw rgba(131,110,249,.13);
+    }
+
+    .lane::before {
+      content: "";
+      position: absolute;
+      left: 2.1cqw;
+      top: 6.4cqw;
+      bottom: 2.4cqw;
+      width: 1px;
+      background: var(--border);
+    }
+
+    .lane h3 { margin: 0 0 .65cqw; font-size: 1.55cqw; letter-spacing: -.025em; }
+    .lane > p { margin: 0 0 1.5cqw; color: var(--muted); font-size: .95cqw; line-height: 1.4; }
+    .event { position: relative; padding-left: 2.2cqw; margin: 1.2cqw 0; font-size: 1.02cqw; }
+    .event::before {
+      content: "";
+      position: absolute;
+      left: -.05cqw;
+      top: .18cqw;
+      width: .72cqw;
+      height: .72cqw;
+      border-radius: 50%;
+      background: var(--muted);
+      border: .28cqw solid var(--surface);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .event.amber::before { background: var(--amber); box-shadow: 0 0 1.2cqw rgba(251,191,36,.6); }
+    .event.green::before { background: var(--green); box-shadow: 0 0 1.2cqw rgba(52,211,153,.6); }
+    .event.red::before { background: var(--red); box-shadow: 0 0 1.2cqw rgba(248,113,113,.6); }
+    .event small { display: block; margin-top: .25cqw; color: var(--muted); font-size: .8cqw; }
+
+    .challenge-pulse {
+      position: absolute;
+      width: 1.1cqw;
+      height: 1.1cqw;
+      left: 1.54cqw;
+      top: 12.34cqw;
+      border: 2px solid var(--amber);
+      border-radius: 50%;
+      animation: pulse 1.55s ease-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(.55); opacity: .95; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    .product-slide { padding: 4.1cqw 3.1cqw 3.2cqw; }
+    .product-slide .topline {
+      position: absolute;
+      top: 2.15cqw;
+      left: 15.5cqw;
+      right: 7.5cqw;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 4;
+    }
+    .product-slide .topline h2 { margin: 0; font-size: 1.8cqw; max-width: none; white-space: nowrap; }
+    .live-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .55cqw; color: var(--amber); font-size: .82cqw; white-space: nowrap; }
+    .live-badge::before { content: ""; width: .5cqw; height: .5cqw; border-radius: 50%; background: var(--amber); animation: glow 1.4s ease-in-out infinite alternate; }
+    @keyframes glow { from { box-shadow: 0 0 0 rgba(251,191,36,0); } to { box-shadow: 0 0 1.2cqw rgba(251,191,36,.75); } }
+
+    .product-board {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      margin-top: 1.1cqw;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #050506;
+    }
+
+    .product-board img { width: 100%; height: 100%; object-fit: cover; }
+    .screen-focus {
+      position: absolute;
+      top: 8.7%;
+      bottom: 4.5%;
+      width: 29.2%;
+      border: 2px solid var(--purple);
+      box-shadow: 0 0 0 999px rgba(4,4,5,.72), 0 0 3cqw rgba(131,110,249,.42);
+      opacity: 0;
+      transform: scale(.97);
+      transition: left .65s var(--ease), opacity .4s ease, transform .65s var(--ease), border-color .4s ease;
+      pointer-events: none;
+    }
+    .screen-focus.shown { opacity: 1; transform: scale(1); }
+    .screen-focus[data-pos="client"] { left: 2.3%; }
+    .screen-focus[data-pos="progress"] { left: 35.4%; border-color: var(--amber); }
+    .screen-focus[data-pos="freelancer"] { left: 68.5%; border-color: var(--green); }
+
+    .focus-label {
+      position: absolute;
+      left: 50%;
+      bottom: 1.4cqw;
+      transform: translateX(-50%);
+      padding: .6cqw 1cqw;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,.9);
+      color: var(--text);
+      font-size: .88cqw;
+      white-space: nowrap;
+    }
+
+    .mechanism {
+      align-self: center;
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1.05cqw;
+      margin-top: 2.5cqw;
+    }
+    .mechanism::before {
+      content: "";
+      position: absolute;
+      left: 5%; right: 5%; top: 2cqw;
+      height: 2px;
+      background: linear-gradient(90deg, var(--purple), var(--purple) 49%, var(--amber) 68%, var(--green));
+      z-index: -1;
+    }
+    .mechanism-step {
+      padding-top: 4.3cqw;
+      min-height: 16cqw;
+      position: relative;
+    }
+    .mechanism-step::before {
+      content: attr(data-index);
+      position: absolute;
+      top: .25cqw;
+      left: 0;
+      width: 3.5cqw;
+      height: 3.5cqw;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--purple);
+      font-weight: 800;
+      font-size: 1.2cqw;
+      box-shadow: 0 0 2cqw rgba(131,110,249,.18);
+    }
+    .mechanism-step:nth-child(4)::before { border-color: var(--amber); }
+    .mechanism-step:nth-child(5)::before { border-color: var(--green); }
+    .mechanism-step h3 { margin: 0 0 .7cqw; font-size: 1.35cqw; }
+    .mechanism-step p { margin: 0; color: var(--muted); font-size: .92cqw; line-height: 1.45; max-width: 18ch; }
+
+    .split-result {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.4cqw;
+      margin-top: 2cqw;
+    }
+    .result {
+      padding: 1.4cqw 1.6cqw;
+      border-top: 1px solid var(--border);
+      font-size: 1.08cqw;
+    }
+    .result small { display: block; margin-top: .35cqw; color: var(--muted); font-size: .83cqw; }
+
+    .trust-layout {
+      align-self: center;
+      display: grid;
+      grid-template-columns: .85fr 1.15fr;
+      gap: 5cqw;
+      align-items: center;
+      padding-right: 5cqw;
+    }
+    .boundary-list { border-top: 1px solid var(--border); }
+    .boundary {
+      display: grid;
+      grid-template-columns: .72fr 1.68fr;
+      gap: 1.4cqw;
+      padding: 1.35cqw 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .boundary strong { font-size: 1.05cqw; }
+    .boundary span { min-width: 0; color: var(--muted); font-size: .86cqw; line-height: 1.4; overflow-wrap: break-word; }
+
+    .close-slide {
+      place-items: center;
+      text-align: center;
+      padding: 7cqw;
+      overflow: hidden;
+    }
+    .close-slide::after {
+      content: "";
+      position: absolute;
+      width: 36cqw;
+      height: 36cqw;
+      border: 1px solid rgba(131,110,249,.22);
+      border-radius: 50%;
+      box-shadow: 0 0 0 7cqw rgba(131,110,249,.035), 0 0 0 14cqw rgba(131,110,249,.02);
+      animation: close-ring 4s ease-in-out infinite alternate;
+      z-index: -1;
+    }
+    @keyframes close-ring { to { transform: scale(1.08); opacity: .62; } }
+    .close-slide h2 { max-width: 16ch; margin: 0 auto 1.2cqw; font-size: 5.3cqw; }
+    .close-slide .lede { margin: 0 auto; max-width: 38ch; }
+    .close-mark { width: 5.2cqw; margin-bottom: 2cqw; filter: drop-shadow(0 0 2cqw rgba(131,110,249,.38)); }
+    .contract-line { margin-top: 2cqw; color: var(--muted); font-size: .86cqw; }
+
+    .hud {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      z-index: 30;
+      height: 2.4cqw;
+      display: flex;
+      align-items: center;
+      padding: 0 2cqw;
+      color: #71717a;
+      font-size: .72cqw;
+      background: linear-gradient(transparent, rgba(0,0,0,.5));
+      opacity: .18;
+      transition: opacity .25s ease;
+    }
+    .stage:hover .hud { opacity: 1; }
+    .progress { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--purple); transition: width .45s var(--ease); }
+    .hud .count { margin-left: auto; }
+    .hud .hint { margin-left: 1.5cqw; }
+    .timer { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .notes {
+      position: absolute;
+      right: 1.4cqw;
+      bottom: 2.8cqw;
+      z-index: 50;
+      width: 27cqw;
+      max-height: 22cqw;
+      overflow: auto;
+      display: none;
+      padding: 1.3cqw;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,.96);
+      color: var(--muted);
+      font-size: .82cqw;
+      line-height: 1.5;
+      box-shadow: 0 1.4cqw 4cqw rgba(0,0,0,.65);
+    }
+    .notes.open { display: block; }
+    .notes strong { display: block; margin-bottom: .5cqw; color: var(--text); }
+
+    .click-zone { position: absolute; top: 0; bottom: 0; z-index: 25; width: 10%; cursor: pointer; }
+    .click-zone.prev { left: 0; }
+    .click-zone.next { right: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="MonEscrow pitch deck">
+    <div class="stage" id="stage">
+      <img class="brand" src="logo.svg" alt="MonEscrow" />
+
+      <section class="slide active" data-title="Opening">
+        <div class="hero-copy">
+          <p class="eyebrow step shown">Programmable milestone escrow</p>
+          <h1 class="step shown">A deadline instead of a chase.</h1>
+          <p class="lede step" data-step="1">The client keeps a veto. The freelancer gets a clock. Software never gets the final word.</p>
+          <div class="proofline step" data-step="2">
+            <span><i></i> Funded up front</span>
+            <span><i></i> Released by milestone</span>
+          </div>
+        </div>
+        <div class="hero-visual step" data-step="2">
+          <img src="three-phone-demo.png" alt="MonEscrow client, shared progress, and freelancer screens" />
+        </div>
+        <aside class="notes"><strong>Opening · 0:00–0:15</strong>A client and freelancer may agree on the work and still disagree about who takes the risk first. MonEscrow makes that relationship programmable without becoming another marketplace.</aside>
+      </section>
+
+      <section class="slide" data-title="The deadlock">
+        <div>
+          <p class="eyebrow">The problem already exists</p>
+          <h2>Both sides are asked to trust first.</h2>
+        </div>
+        <div class="problem-grid">
+          <article class="fear step" data-step="1">
+            <span class="role">Client</span>
+            <strong>“What if I pay and the work never arrives?”</strong>
+            <p>Direct payment moves the delivery risk to the client.</p>
+          </article>
+          <span class="versus step" data-step="2">×</span>
+          <article class="fear step" data-step="2">
+            <span class="role">Freelancer</span>
+            <strong>“What if I deliver and the payment never arrives?”</strong>
+            <p>Work-first moves the payment risk to the freelancer.</p>
+          </article>
+        </div>
+        <div class="deadlock step" data-step="3">Generic escrow locks the money—but can still wait forever for a click.</div>
+        <aside class="notes"><strong>Problem · 0:15–0:35</strong>Direct payment asks the client to trust delivery. Work-first asks the freelancer to trust payment. Generic escrow still leaves a finished milestone waiting on someone’s inbox.</aside>
+      </section>
+
+      <section class="slide" data-title="The challenge window">
+        <div>
+          <p class="eyebrow">The mechanism</p>
+          <h2>Fast enough to pay. Slow enough to stop.</h2>
+        </div>
+        <div class="comparison">
+          <article class="lane step" data-step="1">
+            <h3>Traditional escrow</h3>
+            <p>A human click is the finish line.</p>
+            <div class="event">Work finishes</div>
+            <div class="event amber">Wait for client<small>The inbox becomes the bottleneck</small></div>
+            <div class="event green">Payment</div>
+          </article>
+          <article class="lane step" data-step="2">
+            <h3>Naive AI escrow</h3>
+            <p>The bot becomes the final judge.</p>
+            <div class="event">Bot checks</div>
+            <div class="event red">Instant payment<small>A wrong verdict is already irreversible</small></div>
+          </article>
+          <article class="lane focus step" data-step="3">
+            <span class="challenge-pulse"></span>
+            <h3>MonEscrow</h3>
+            <p>The verifier proposes. People retain control.</p>
+            <div class="event">Pass proposed</div>
+            <div class="event amber">Challenge window<small>Client can object before the deadline</small></div>
+            <div class="event green">Silence → release</div>
+            <div class="event red">Objection → freeze</div>
+          </article>
+        </div>
+        <aside class="notes"><strong>Difference · 0:35–1:10</strong>Traditional escrow can wait forever. Naive automation pays before anyone can catch a wrong verdict. MonEscrow opens a challenge window: silence makes release callable; objection freezes the milestone for the arbiter.</aside>
+      </section>
+
+      <section class="slide product-slide" data-title="Three synchronized screens">
+        <div class="topline">
+          <h2>One escrow. Three synchronized views.</h2>
+          <span class="live-badge">Challenge window · 01:23</span>
+        </div>
+        <div class="product-board">
+          <img src="three-phone-demo.png" alt="MonEscrow mobile UI across client, shared progress, and freelancer views" />
+          <div class="screen-focus step" data-step="1" data-pos="client"><span class="focus-label">Client can object & freeze</span></div>
+          <div class="screen-focus step" data-step="2" data-pos="progress"><span class="focus-label">Shared state explains what happens next</span></div>
+          <div class="screen-focus step" data-step="3" data-pos="freelancer"><span class="focus-label">Freelancer sees a deadline—not a promise</span></div>
+        </div>
+        <aside class="notes"><strong>Product · 1:10–1:40</strong>These are the three live phones. The client sees the veto, the center view carries the shared state, and the freelancer sees when release becomes callable. The dock keeps Progress one thumb away.</aside>
+      </section>
+
+      <section class="slide" data-title="Step-by-step flow">
+        <div>
+          <p class="eyebrow">The full job is funded first</p>
+          <h2>Every step has one actor and one consequence.</h2>
+        </div>
+        <div class="mechanism">
+          <article class="mechanism-step step" data-step="1" data-index="1">
+            <h3>Agree</h3><p>AI turns the brief into measurable milestones. Both parties approve.</p>
+          </article>
+          <article class="mechanism-step step" data-step="2" data-index="2">
+            <h3>Fund</h3><p>The client locks the full job budget in the escrow contract.</p>
+          </article>
+          <article class="mechanism-step step" data-step="3" data-index="3">
+            <h3>Submit</h3><p>The freelancer attaches exact evidence to one milestone.</p>
+          </article>
+          <article class="mechanism-step step" data-step="4" data-index="4">
+            <h3>Propose</h3><p>Deterministic checks plus bounded review propose a pass.</p>
+          </article>
+          <article class="mechanism-step step" data-step="5" data-index="5">
+            <h3>Settle</h3><p>Silence enables release. Objection freezes for the arbiter.</p>
+          </article>
+        </div>
+        <div class="split-result">
+          <div class="result step success" data-step="6">Silence → anyone can trigger release<small>Released value is credited to the freelancer’s owed balance.</small></div>
+          <div class="result step danger" data-step="6">Objection → milestone freezes<small>The named arbiter resolves; the verifier cannot.</small></div>
+        </div>
+        <aside class="notes"><strong>Flow · 1:40–2:12</strong>The verifier signs a proposal tied to one escrow, one milestone, and one exact submission. It cannot move money. After the window, anyone can call release. Released funds become an owed balance, then the freelancer withdraws.</aside>
+      </section>
+
+      <section class="slide" data-title="Trust boundaries">
+        <div class="trust-layout">
+          <div>
+            <p class="eyebrow">Trust is visible and bounded</p>
+            <h2>No software gets unilateral control.</h2>
+            <p class="lede">The contract holds value. Every other actor receives the minimum authority needed.</p>
+          </div>
+          <div class="boundary-list">
+            <div class="boundary step" data-step="1"><strong>Verifier</strong><span>Can propose a pass. Cannot release funds or settle disputes.</span></div>
+            <div class="boundary step" data-step="2"><strong>Client</strong><span>Can object during the window. Cannot decide the dispute alone.</span></div>
+            <div class="boundary step" data-step="3"><strong>Arbiter</strong><span>Acts only after a milestone is frozen.</span></div>
+            <div class="boundary step" data-step="4"><strong>Escrow contract</strong><span>Holds funds and enforces role, state, amount, and time.</span></div>
+          </div>
+        </div>
+        <aside class="notes"><strong>Trust · 2:12–2:38</strong>If the verifier lies, the client keeps the veto window. If it goes offline, no pass is proposed and no funds move. The arbiter only gains authority after a dispute. The escrow contract is the shared source of truth.</aside>
+      </section>
+
+      <section class="slide close-slide" data-title="Close">
+        <div>
+          <img class="close-mark step" data-step="1" src="logo-mark.svg" alt="MonEscrow progress lock" />
+          <p class="eyebrow step" data-step="1">Built on Monad testnet</p>
+          <h2 class="step" data-step="2"><span class="success">Silence pays.</span><br><span class="warning">Objection pauses.</span></h2>
+          <p class="lede step" data-step="3">A programmable deadline for freelance work—without becoming another marketplace.</p>
+          <p class="contract-line step" data-step="3">Fund · Submit · Challenge · Settle · Withdraw</p>
+        </div>
+        <aside class="notes"><strong>Close · 2:38–3:00</strong>MonEscrow gives freelancers a deadline instead of a chase, gives clients a veto instead of blind automation, and gives both parties one shared source of truth. Silence should pay. Objection should pause.</aside>
+      </section>
+
+      <div class="click-zone prev" aria-label="Previous step"></div>
+      <div class="click-zone next" aria-label="Next step"></div>
+      <div class="hud" aria-hidden="true">
+        <span class="timer" id="timer">00:00</span>
+        <span class="hint">← → step · N notes · F fullscreen · R restart</span>
+        <span class="count" id="count">1 / 7</span>
+        <span class="progress" id="progress"></span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const count = document.getElementById('count');
+      const progress = document.getElementById('progress');
+      const timer = document.getElementById('timer');
+      const stage = document.getElementById('stage');
+      let slideIndex = 0;
+      let stepIndex = 0;
+      let startedAt = Date.now();
+
+      const stepsFor = (slide) => [...slide.querySelectorAll('[data-step]')]
+        .reduce((values, el) => values.includes(+el.dataset.step) ? values : [...values, +el.dataset.step], [])
+        .sort((a, b) => a - b);
+
+      function applyState() {
+        slides.forEach((slide, index) => {
+          slide.classList.toggle('active', index === slideIndex);
+          slide.classList.toggle('exit', index < slideIndex);
+          if (index !== slideIndex) slide.querySelector('.notes')?.classList.remove('open');
+        });
+        const active = slides[slideIndex];
+        const values = stepsFor(active);
+        active.querySelectorAll('[data-step]').forEach(el => {
+          el.classList.toggle('shown', +el.dataset.step <= (values[stepIndex - 1] ?? -Infinity));
+        });
+        count.textContent = `${slideIndex + 1} / ${slides.length}`;
+        progress.style.width = `${((slideIndex + (values.length ? stepIndex / (values.length + 1) : 0)) / slides.length) * 100}%`;
+        document.title = `${slideIndex + 1}/${slides.length} · ${active.dataset.title} — MonEscrow`;
+      }
+
+      function next() {
+        const values = stepsFor(slides[slideIndex]);
+        if (stepIndex < values.length) stepIndex += 1;
+        else if (slideIndex < slides.length - 1) { slideIndex += 1; stepIndex = 0; }
+        applyState();
+      }
+
+      function previous() {
+        if (stepIndex > 0) stepIndex -= 1;
+        else if (slideIndex > 0) {
+          slideIndex -= 1;
+          stepIndex = stepsFor(slides[slideIndex]).length;
+        }
+        applyState();
+      }
+
+      function restart() {
+        slideIndex = 0;
+        stepIndex = 0;
+        startedAt = Date.now();
+        applyState();
+      }
+
+      function toggleNotes() { slides[slideIndex].querySelector('.notes')?.classList.toggle('open'); }
+
+      document.querySelector('.click-zone.next').addEventListener('click', next);
+      document.querySelector('.click-zone.prev').addEventListener('click', previous);
+      document.addEventListener('keydown', (event) => {
+        if (['ArrowRight', 'ArrowDown', ' ', 'Enter', 'PageDown'].includes(event.key)) { event.preventDefault(); next(); }
+        if (['ArrowLeft', 'ArrowUp', 'Backspace', 'PageUp'].includes(event.key)) { event.preventDefault(); previous(); }
+        if (event.key.toLowerCase() === 'r') restart();
+        if (event.key.toLowerCase() === 'n') toggleNotes();
+        if (event.key.toLowerCase() === 'f') {
+          if (!document.fullscreenElement) stage.requestFullscreen?.();
+          else document.exitFullscreen?.();
+        }
+      });
+
+      let touchX = null;
+      stage.addEventListener('touchstart', e => touchX = e.changedTouches[0].screenX, { passive: true });
+      stage.addEventListener('touchend', e => {
+        if (touchX === null) return;
+        const delta = e.changedTouches[0].screenX - touchX;
+        if (Math.abs(delta) > 45) delta < 0 ? next() : previous();
+        touchX = null;
+      }, { passive: true });
+
+      setInterval(() => {
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+        timer.style.color = seconds >= 180 ? 'var(--red)' : seconds >= 165 ? 'var(--amber)' : 'var(--muted)';
+      }, 250);
+
+      applyState();
+    })();
+  </script>
+</body>
+</html>
