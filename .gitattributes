@@ -1,0 +1,21 @@
+# Line endings are pinned to LF because this project claims a reproducible build.
+#
+# solc hashes the *source text* into the CBOR metadata it appends to the runtime
+# bytecode (foundry.toml sets bytecode_hash = "ipfs"). Git on Windows defaults to
+# core.autocrlf=true, so without this file the same commit checks out as CRLF on a
+# Windows clone and LF on a Linux one — the same source, different bytes, a different
+# metadata hash, and therefore a different bytecode tail. That would break A-12's
+# byte-identical claim across machines and can downgrade explorer verification from a
+# full match to a partial one.
+#
+# The blobs are already stored as LF, so this changes no committed content. It only
+# stops the working tree from drifting per platform.
+* text=auto eol=lf
+
+# Assets must be delivered byte-for-byte; never run them through text conversion.
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.zip binary
+*.svg text eol=lf
