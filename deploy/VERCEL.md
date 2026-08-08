@@ -1,0 +1,85 @@
+# Vercel deployment
+
+D-4 reversed on 2026-08-08: hosted **and** clean-clone, not clean-clone only. A judge gets a
+link they can click; `DEMO.md`'s local path stays valid so nothing depends on this account
+staying up.
+
+## Right now: the holding page
+
+`web/` has no application in it — T-18 through T-22 are unstarted, so a Vercel build today
+would produce nothing. `site/` is a standalone static page that exists so the link is not a
+404 in the meantime. It lives in its own directory precisely so it can never collide with
+Taskforce's scaffold under `web/` (C10: `web/src/**` is theirs).
+
+`vercel.json` at the repo root serves `site/` with no build step.
+
+```bash
+npm i -g vercel
+vercel login
+vercel --prod          # from the repo root
+```
+
+Or connect the GitHub repo in the Vercel dashboard and accept the defaults — `vercel.json`
+already specifies everything. **Do not set a framework preset**; it is deliberately `null`.
+
+After the first deploy, if the domain is not `monescrow.vercel.app`, update the two absolute
+URLs in `site/index.html` (`og:url` and `og:image`, plus `twitter:image`). Open Graph
+scrapers are inconsistent about resolving relative image paths, so those three are absolute
+on purpose while every other asset reference is relative — which is what lets the same file
+render correctly opened straight off disk.
+
+## Later: swapping in the real app
+
+When T-18 lands, change `vercel.json` to:
+
+```json
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "rootDirectory": "web"
+}
+```
+
+Keep `site/` around — it is a useful thing to point at if the app ever breaks during judging.
+
+## Environment variables — the part worth reading twice
+
+Hosting changes the risk profile of the verifier key. Locally it sits in a gitignored
+`.env.local`; on Vercel it sits in a dashboard field, and **which field decides whether it
+ships to every visitor's browser.**
+
+| Variable | Vercel scope | Value |
+|---|---|---|
+| `NEXT_PUBLIC_FACTORY_ADDRESS` | all environments | set after A-4 |
+| `NEXT_PUBLIC_MONAD_TESTNET_RPC` | all environments | `https://testnet-rpc.monad.xyz` |
+| `NEXT_PUBLIC_VERIFIER_ADDRESS` | all environments | `0x87B9AfEafA109e96c41504E0ce84e08c055D5eaf` |
+| `NEXT_PUBLIC_PARA_API_KEY` | all environments | optional; empty falls back to an injected wallet |
+| **`VERIFIER_PRIVATE_KEY`** | **all environments** | **never prefixed `NEXT_PUBLIC_`** |
+| `GITHUB_TOKEN` | all environments | optional, raises the API rate limit |
+| `ANTHROPIC_API_KEY` | all environments | optional; a BYOK header wins over it |
+
+Next.js inlines **every** `NEXT_PUBLIC_`-prefixed variable into the client bundle at build
+time. There is no runtime check and no warning — a key pasted into a field named
+`NEXT_PUBLIC_VERIFIER_PRIVATE_KEY` is published to every visitor, permanently, and rotating
+it afterwards does not un-publish the builds that already shipped. Paste it as
+`VERIFIER_PRIVATE_KEY`, nothing else.
+
+Verify after the first deploy with the app live:
+
+```bash
+curl -s https://<deployment>/ | grep -c "$(grep VERIFIER_PRIVATE_KEY web/.env.local | cut -d= -f2)"
+# must print 0
+```
+
+Worth keeping in proportion: a leaked verifier key lets an attacker *propose* a passing
+milestone. Whether that moves money depends entirely on **D-7** — with a non-zero challenge
+window the client can still object, which is the design; with `challengeWindow == 0` the
+attacker can attest and release in one block. Until D-7 lands, treat this key as capable of
+moving funds.
+
+## What not to host
+
+`contracts/`, `deploy/keys/` and `tools/relay/spool/` have no business being served.
+`vercel.json` sets `outputDirectory` to a single directory, so nothing outside it is
+published — but if the config is ever changed to a framework preset, re-check that.

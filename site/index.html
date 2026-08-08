@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MonEscrow — the verifier proposes, it never decides</title>
+<meta name="description" content="Freelance escrow on Monad. The client funds the job up front; each milestone releases as it is shown to be done. A passing check opens a challenge window instead of moving money.">
+
+<link rel="icon" href="assets/favicon.png" type="image/png">
+
+<!-- Update the two og:url/og:image origins if the deployment lands on a different domain.
+     Scrapers are inconsistent about resolving relative og:image, so these are absolute. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="MonEscrow — the verifier proposes, it never decides">
+<meta property="og:description" content="Freelance escrow on Monad. A passing check opens a challenge window instead of moving money. Client silence releases; client objection freezes.">
+<meta property="og:url" content="https://monescrow.vercel.app/">
+<meta property="og:image" content="https://monescrow.vercel.app/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MonEscrow — the verifier proposes, it never decides">
+<meta name="twitter:description" content="Freelance escrow on Monad. A passing check opens a challenge window instead of moving money.">
+<meta name="twitter:image" content="https://monescrow.vercel.app/assets/og.png">
+<meta name="theme-color" content="#09090b">
+
+<style>
+  :root{
+    --bg:#09090b; --surface:#18181b; --border:#27272a;
+    --text:#f4f4f5; --muted:#a1a1aa;
+    --accent:#836EF9; --success:#34d399; --warning:#fbbf24; --danger:#f87171;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent)}
+  .wrap{max-width:860px;margin:0 auto;padding:0 24px}
+  header{padding:56px 0 8px}
+  header img{height:44px;width:auto;display:block}
+  .tag{
+    display:inline-block;margin-top:22px;padding:5px 11px;border-radius:999px;
+    border:1px solid var(--border);background:var(--surface);
+    color:var(--muted);font:500 12px/1 var(--mono);letter-spacing:.04em;
+  }
+  h1{font-size:clamp(30px,5.4vw,50px);line-height:1.1;letter-spacing:-.022em;margin:22px 0 0;font-weight:660}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{font-size:clamp(17px,2.4vw,20px);color:var(--muted);margin:20px 0 0;max-width:60ch}
+  .cta{display:flex;flex-wrap:wrap;gap:12px;margin:34px 0 0}
+  .btn{
+    display:inline-block;padding:11px 19px;border-radius:9px;text-decoration:none;
+    font-weight:560;font-size:15px;border:1px solid transparent;transition:.15s;
+  }
+  .btn-primary{background:var(--accent);color:#0b0a10}
+  .btn-primary:hover{filter:brightness(1.1)}
+  .btn-ghost{border-color:var(--border);color:var(--text);background:var(--surface)}
+  .btn-ghost:hover{border-color:var(--accent)}
+  section{padding:60px 0;border-top:1px solid var(--border);margin-top:60px}
+  h2{font-size:clamp(21px,3vw,27px);letter-spacing:-.015em;margin:0 0 14px;font-weight:620}
+  p{margin:0 0 16px;color:var(--muted);max-width:66ch}
+  p strong{color:var(--text);font-weight:600}
+  .deadlock{
+    display:grid;gap:12px;grid-template-columns:1fr;margin:26px 0;
+  }
+  @media(min-width:620px){.deadlock{grid-template-columns:1fr 1fr}}
+  .quote{
+    background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:18px 20px;
+  }
+  .quote b{display:block;font:600 11px/1 var(--mono);letter-spacing:.09em;color:var(--muted);margin-bottom:9px}
+  .quote span{color:var(--text);font-size:15px}
+
+  /* --- the interactive bit: the mechanism in ten seconds --- */
+  .demo{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:22px;margin:26px 0 0}
+  .demo-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  .demo-title{font-weight:600;font-size:15px}
+  .state{font:600 11px/1 var(--mono);letter-spacing:.08em;padding:5px 9px;border-radius:6px;border:1px solid var(--border);color:var(--muted)}
+  .state[data-s="attested"]{color:var(--warning);border-color:#4d3d12}
+  .state[data-s="released"]{color:var(--success);border-color:#14503c}
+  .state[data-s="disputed"]{color:var(--danger);border-color:#5a2020}
+  .bar{height:7px;border-radius:99px;background:#000;overflow:hidden;margin:16px 0 10px;border:1px solid var(--border)}
+  .fill{height:100%;width:0;background:var(--warning);transition:width .25s linear}
+  .fill.done{background:var(--success)}
+  .fill.frozen{background:var(--danger)}
+  .demo-msg{font-size:14px;color:var(--muted);min-height:44px;margin:0}
+  .demo-msg b{color:var(--text)}
+  .demo-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+  .demo-actions button{
+    font:560 14px/1 inherit;padding:9px 15px;border-radius:8px;cursor:pointer;
+    background:#000;color:var(--text);border:1px solid var(--border);transition:.15s;
+  }
+  .demo-actions button:hover:not(:disabled){border-color:var(--accent)}
+  .demo-actions button:disabled{opacity:.36;cursor:not-allowed}
+  .demo-actions .danger{border-color:#5a2020;color:var(--danger)}
+  .demo-note{font-size:13px;color:var(--muted);margin:14px 0 0;font-style:italic}
+
+  figure{margin:26px 0 0}
+  figure img{width:100%;height:auto;border-radius:11px;border:1px solid var(--border);display:block}
+  figcaption{font-size:13px;color:var(--muted);margin-top:10px}
+
+  table{width:100%;border-collapse:collapse;margin:20px 0 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase}
+  td.ok{color:var(--success)}
+  td.wip{color:var(--warning)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:1.5px 5px}
+  footer{border-top:1px solid var(--border);margin-top:60px;padding:30px 0 60px;color:var(--muted);font-size:13.5px}
+  footer a{color:var(--muted)}
+  .warn{border-left:2px solid var(--warning);padding-left:15px;margin:22px 0}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <img src="assets/logo.svg" alt="MonEscrow">
+    <span class="tag">MONAD TESTNET · NOT AUDITED · HACKATHON BUILD</span>
+    <h1>The verifier <em>proposes</em>.<br>It never decides.</h1>
+    <p class="lede">
+      Freelance escrow where the client funds the whole job up front and each milestone
+      releases as it is shown to be done. A passing check does not move money — it opens a
+      challenge window.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/rahmanef63/monescrow">Read the code</a>
+      <a class="btn btn-ghost" href="https://github.com/rahmanef63/monescrow/blob/main/DEMO.md">Run it locally</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>The deadlock</h2>
+    <div class="deadlock">
+      <div class="quote"><b>CLIENT</b><span>“If I pay first, what if the freelancer disappears?”</span></div>
+      <div class="quote"><b>FREELANCER</b><span>“If I work first, what if the client doesn’t pay?”</span></div>
+    </div>
+    <p>
+      Escrow breaks that deadlock and replaces it with a harder question: <strong>who decides
+      the work is done?</strong> Hand it to a human and the freelancer waits on someone’s
+      inbox. Hand it to a bot and you have let software move somebody’s money on its own
+      judgement.
+    </p>
+    <p>The answer here is to make the bot’s verdict a proposal with a deadline.</p>
+
+    <div class="demo">
+      <div class="demo-head">
+        <span class="demo-title">Milestone 1 — “Deployed and reachable”</span>
+        <span class="state" id="state" data-s="submitted">SUBMITTED</span>
+      </div>
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <p class="demo-msg" id="msg">The freelancer submitted a deliverable. Nothing has moved yet.</p>
+      <div class="demo-actions">
+        <button id="btn-attest">Verifier signs a pass</button>
+        <button id="btn-dispute" class="danger" disabled>Client objects</button>
+        <button id="btn-reset">Reset</button>
+      </div>
+      <p class="demo-note">
+        A simulation, not the chain — the real window defaults to 3 days and 90 seconds in the demo.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Why a weak check is survivable</h2>
+    <p>
+      Point an HTTP check at a <strong>completely blank page</strong> and it passes. Status
+      200, nothing required in the body, green tick, valid signature from the real verifier
+      key.
+    </p>
+    <p>
+      That is not a bug shown as a feature. It is the honest state of every automated check
+      anyone ships — <code>HTTP 200</code> and <code>Lighthouse &gt; 80</code> are both
+      satisfied by an empty file. Any system treating a check like that as a <em>verdict</em>
+      is one blank page away from paying out for nothing.
+    </p>
+    <p>
+      So the contract does not treat it as a verdict. The pass opens the window, the client
+      objects inside it, and the money stays put. <strong>The check was wrong and the client
+      still kept their funds.</strong> The design survives a weak check because it never
+      depended on the check being strong.
+    </p>
+    <figure>
+      <img src="assets/challenge-window.png" alt="Three timelines: client silence releases the funds, client objection freezes them for an arbiter, and the window running out with no attestation.">
+      <figcaption>Three timelines. Silence pays the freelancer, an objection freezes for the arbiter.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What is actually built</h2>
+    <p>Honest status. This page is a placeholder while the interface is finished — everything below is checkable in the repository.</p>
+    <table>
+      <tr><th>Piece</th><th>State</th></tr>
+      <tr><td>Escrow + factory contracts</td><td class="ok">written, compiling, formatted</td></tr>
+      <tr><td>Contract test suite</td><td class="ok">130 tests across 10 suites, 8/8 mutations caught</td></tr>
+      <tr><td>Cancun support on Monad</td><td class="ok">probed on the live chain, not assumed</td></tr>
+      <tr><td>Clean-clone build</td><td class="ok">proven from a tree with no dependencies</td></tr>
+      <tr><td>Safe deployment relay</td><td class="ok">full proposal dry run completed</td></tr>
+      <tr><td>Brand, empty states, deck</td><td class="ok">delivered against a frozen manifest</td></tr>
+      <tr><td>Web interface</td><td class="wip">in progress</td></tr>
+      <tr><td>Deployed + verified on explorers</td><td class="wip">test gate green; waiting on the deployment Safe</td></tr>
+    </table>
+    <div class="warn">
+      <p style="margin:0">
+        Testnet only, and not audited. Nothing here should hold funds you would miss.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap" style="padding:0">
+      Built for a Monad hackathon ·
+      <a href="https://github.com/rahmanef63/monescrow">github.com/rahmanef63/monescrow</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var WINDOW_MS = 9000; // compressed for a web page; the contract default is 3 days
+  var stateEl = document.getElementById('state');
+  var fill    = document.getElementById('fill');
+  var msg     = document.getElementById('msg');
+  var attest  = document.getElementById('btn-attest');
+  var dispute = document.getElementById('btn-dispute');
+  var reset   = document.getElementById('btn-reset');
+  var timer   = null, start = 0;
+
+  function set(label, key){ stateEl.textContent = label; stateEl.dataset.s = key; }
+
+  function stop(){ if (timer) { cancelAnimationFrame(timer); timer = null; } }
+
+  function toReset(){
+    stop();
+    fill.style.width = '0';
+    fill.className = 'fill';
+    set('SUBMITTED','submitted');
+    msg.innerHTML = 'The freelancer submitted a deliverable. Nothing has moved yet.';
+    attest.disabled = false;
+    dispute.disabled = true;
+  }
+
+  function tick(){
+    var pct = Math.min(1, (Date.now() - start) / WINDOW_MS);
+    fill.style.width = (pct * 100).toFixed(1) + '%';
+    if (pct >= 1) {
+      stop();
+      fill.className = 'fill done';
+      set('RELEASED','released');
+      msg.innerHTML = '<b>The window closed and the client stayed silent, so anyone can now release the funds</b> — the freelancer never had to chase anybody for a signature. Silence is a decision, and it favours the person who did the work.';
+      dispute.disabled = true;
+      return;
+    }
+    timer = requestAnimationFrame(tick);
+  }
+
+  attest.addEventListener('click', function(){
+    set('ATTESTED','attested');
+    msg.innerHTML = 'The verifier signed a pass. <b>No money moved.</b> A challenge window opened instead — the client can object for as long as it runs.';
+    attest.disabled = true;
+    dispute.disabled = false;
+    start = Date.now();
+    stop();
+    timer = requestAnimationFrame(tick);
+  });
+
+  dispute.addEventListener('click', function(){
+    stop();
+    fill.className = 'fill frozen';
+    set('DISPUTED','disputed');
+    msg.innerHTML = '<b>Frozen.</b> Release now reverts for everyone, including the freelancer, until an arbiter rules. The automated check said pass; the client said no; the client won.';
+    dispute.disabled = true;
+  });
+
+  reset.addEventListener('click', toReset);
+  toReset();
+})();
+</script>
+</body>
+</html>
