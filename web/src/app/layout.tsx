@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Providers } from './providers'
 import { Dock } from '@/components/Dock'
+import { ChatSheet } from '@/components/ChatSheet'
 import { hasFactory } from '@/lib/chain'
 
 /**
@@ -106,6 +107,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </a>
 
           <Dock />
+
+          {/*
+            The other half of the dock's centre slot. `Dock` fires `monescrow:open-chat` and
+            `ChatSheet` listens for it, but nothing had ever mounted the listener — so the
+            assistant button did nothing at all, while both components' own tests passed
+            because each half was correct in isolation. Mounted here rather than per page so
+            the assistant is reachable from every screen, which is what a dock slot promises.
+          */}
+          <ChatSheet />
 
           {/*
             Padding, not margin: the dock is fixed, so without `pb-dock` the last control on

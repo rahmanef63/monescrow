@@ -1634,3 +1634,98 @@ next to the blank rather than in a document you might not read.
 Evidence: `jq` absent → `printf '' | sha256sum` equals the hash `make repro` prints for both contracts · `forge script --sig initCode() --offline` → 15,948 bytes vs RUNBOOK's 15,787 · `forge test` → 133 passed vs README's 12/12 · `web/.env.example:15` `NEXT_PUBLIC_FACTORY_ADDRESS=` empty · clean-clone `npm run typecheck` now exits 0 with no `.next` present · 677 web tests, tsc and build clean at 81127e2
 Blocks: G4. None of this blocks G2 — the deploy path itself is sound apart from the stale hash in the runbook, which blocks it on deploy day rather than now.
 Files: reporting on contracts/Makefile, deploy/RUNBOOK.md, DEMO.md, README.md, deploy/VERCEL.md, docs/01-INTERFACES.md, site/index.html — none of them edited
+
+## 2026-08-08T08:47Z · A · GATE
+**All four environment variables are live and the verifier key is provably not in the browser
+bundle.** The human set `VERIFIER_PRIVATE_KEY`; A set the three public ones. Redeployed
+(47.2 s) so the values take effect, then checked the thing that actually matters.
+
+**The leak check, done properly.** A first pass found 20 key-shaped strings in the client
+bundle, which looked alarming and was not — `0x6492649264926492…` is the ERC-6492 magic
+suffix, `0x7ae96a2b…` is a secp256k1 constant, `0xffffffff…` is a mask. Eyeballing that would
+have been guessing. So instead: collect every unique 64-hex candidate across the HTML and all
+15 JS chunks, SHA-256 each **in the browser**, and compare against the SHA-256 of the real key
+computed **in the sandbox**. Only hashes crossed between the two, never the key.
+
+```
+unique 64-hex candidates in bundle : 38
+chunks scanned                     : 15
+key found                          : false
+```
+
+That is the difference between "I looked and it seemed fine" and evidence. The method is worth
+reusing: to prove a secret is absent from an artifact, compare digests rather than substrings —
+it works without either side ever holding the other's plaintext.
+
+**Live endpoint results:**
+
+| Route | Result | Reading |
+|---|---|---|
+| `/api/version` | 200 `{"buildId":"dpl_2kup…"}` | the deployment is the one just built |
+| `/api/ai/milestones` | 200, a 4-milestone split with rationales | **the template parser works with no LLM key at all** — C7 rule 3 holding in production |
+| `/api/verify` | 400 `"escrow must be a 0x-prefixed 20-byte address"` | **the key loaded.** A missing key is a 502; a 400 means it got past signing setup and is rejecting A's deliberately empty test body |
+
+That last row is the one worth reading twice. Before the key was set this route returned
+**502** "the verifier signing key is not available". It now returns **400** on malformed input.
+The status code moving from 5xx to 4xx is the proof the configuration took — *our* failure
+became *the caller's* failure, which is exactly the C6 distinction the route was built around.
+
+`NEXT_PUBLIC_FACTORY_ADDRESS` remains the only unset variable, and it stays that way until G2.
+Evidence: `GET /api/v9/projects/monescrow/env` → 4 vars, `VERIFIER_PRIVATE_KEY` type `sensitive`, correctly un-prefixed · redeploy `dpl_2kup…` READY in 47,208 ms · digest comparison over 38 candidates → no match · `/api/verify` 502 → 400
+Unblocks: the hosted app is now functionally complete except for the chain — A-5 is one variable
+Files: — (project settings)
+
+## 2026-08-08T08:45Z · T · DECIDE
+**The assistant button did nothing, and the fix exposes a seam worth naming. Starting Wave 5:
+provider-agnostic BYOK.** Posting the plan before the work so A knows what is moving.
+
+**The bug, because the shape of it matters more than the fix.** `Dock` fires a
+`monescrow:open-chat` event, `ChatSheet` listens for it — and **nothing ever mounted
+`ChatSheet`**. Two agents built the two halves of one interaction, each half correct, each
+half's tests green, and the button was dead. No typecheck, no test and no build says a word
+about a component nobody renders. Fixed by mounting it in the root layout, so the assistant is
+reachable from every screen rather than one; verified by finding both the event name and the
+sheet's own copy in the same shipped client chunk, not by reading the diff. This is the same
+class as the manifest pointing at a missing icon: everything compiles, nothing works.
+
+**Wave 5, T-23…T-27.** The human supplied a GitHub token locally and the verifier key is now
+set in Vercel, and asked that BYOK follow `models-rahmanef-com` — a multi-tenant BYOK model
+registry. Studied it; four ideas are worth taking and one is worth taking *carefully*.
+
+  - **A provider registry**, slug → `{ baseUrl, protocol, envVars }`, kept separate from any
+    capability catalogue. Ours is hardwired to Anthropic in two places, so a user whose key is
+    an OpenAI or OpenRouter key currently gets the template fallback and no explanation.
+  - **`resolveModel("provider/model")`** returning a ready-to-call descriptor. Splitting on the
+    *first* `/` matters: OpenRouter model ids contain slashes.
+  - **Two wire protocols cover nearly everything** — `openai` chat/completions and `anthropic`
+    messages. Aggregators are just OpenAI-compatible providers. Our tool-calling loop currently
+    speaks only Anthropic's `tool_use`/`tool_result` blocks and will need the OpenAI
+    `tool_calls` shape too, which is the real work in this wave.
+  - **A `CredentialStore` seam** — every lookup through `getKey(tenantId, provider)`. Ours
+    collapses to per-request header, then env, then none, and stays memory-only either way.
+
+**The one to take carefully, and the reason it is a DECIDE rather than a DONE:
+host-gating.** In that project a provider's key is *pinned* to that provider's registry
+endpoint, so a caller-supplied `baseUrl` can never redirect a known provider's key somewhere
+else. That is not a nicety here — `/api/chat` and `/api/ai/milestones` accept a key from a
+request header. Without pinning, anyone who can reach those endpoints could pass
+`provider: "anthropic"` with their own `baseUrl` and have the server post somebody's key to a
+host they control. It is the exact shape of the `bind.ts` problem: the dangerous input is the
+one the caller supplies and the server trusts. So a `baseUrl` override is honoured **only** for
+providers not in the registry, and the tests will assert a known provider's key cannot be
+redirected.
+
+**What is done and what is not, for A's planning:**
+
+    done       T-1..T-22, the assistant tool layer, the PWA and update toast,
+               the three judge-path defects in web/ (81127e2), the chat mount
+    now        T-23..T-27 — provider registry, host-gated resolve, credential
+               store, both wire protocols, and rewiring both routes
+    not mine   the 8 audit blockers in A-owned files, reported at 08:34Z —
+               the fake `make repro` proof and the stale RUNBOOK init-code hash
+               are the two that bite on deploy day
+    blocked    nothing of T's. G2 is A's and needs the deployer funded.
+
+Evidence: `grep -rl 'monescrow:open-chat' .next/static/chunks/` and `grep -rl 'no MON has reached'` return the same chunk after the fix · `tsc --noEmit` exit 0, `next build` clean · reference studied at `models-rahmanef-com@main`: `src/resolve.js` (host-gate), `src/registry.js`, `src/store.js`, `src/call.js`
+Unblocks: a judge whose key is not an Anthropic key gets a working assistant instead of a silent template fallback
+Files: web/src/app/layout.tsx, TASKS.md

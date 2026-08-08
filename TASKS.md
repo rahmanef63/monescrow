@@ -128,6 +128,19 @@ they flip G1.
 | T-21 | `/new` brief → draft → edit amounts and criteria → fund and create | ✅ |
 | T-22 | `/job/[address]` — four viewer roles, milestone cards, live countdown | ✅ |
 
+**Wave 5 — provider-agnostic BYOK.** New scope. The assistant and the brief parser are both
+hardwired to Anthropic; this makes the key the user pastes work with any provider, following
+the pattern in `models-rahmanef-com` (a multi-tenant BYOK model registry).
+
+| ID | Task | State |
+|---|---|---|
+| T-23 | `models/registry.ts` — provider slug → `{ baseUrl, protocol, envVars }` | ⬜ |
+| T-24 | `models/resolve.ts` — `parseRef` + `resolveModel`, **host-gated** so a key can never be sent to another provider | ⬜ |
+| T-25 | `models/store.ts` — `CredentialStore` seam: per-request header → env → none | ⬜ |
+| T-26 | `models/call.ts` — both wire protocols (`openai` chat/completions, `anthropic` messages) **including tool calling** | ⬜ |
+| T-27 | Wire `/api/chat` and `/api/ai/milestones` onto it; model picker in the chat sheet | ⬜ |
+| T-28 | ~~Assistant button did nothing — `ChatSheet` was never mounted~~ | ✅ |
+
 ## S — Studio (ChatGPT)
 
 | ID | Task | State | Blocked by |
