@@ -62,15 +62,38 @@ Hosting changes the risk profile of the verifier key. Locally it sits in a gitig
 `.env.local`; on Vercel it sits in a dashboard field, and **which field decides whether it
 ships to every visitor's browser.**
 
-| Variable | Vercel scope | Value |
+**Audited 2026-08-08 against what the code actually reads, not against C8.** The project
+currently has **zero environment variables configured** — the Environment Variables page is
+empty. Everything below is what has to be added before the deployed app does anything beyond
+render empty states.
+
+| Variable | Needed for | If missing |
 |---|---|---|
-| `NEXT_PUBLIC_FACTORY_ADDRESS` | all environments | set after A-4 |
-| `NEXT_PUBLIC_MONAD_TESTNET_RPC` | all environments | `https://testnet-rpc.monad.xyz` |
-| `NEXT_PUBLIC_VERIFIER_ADDRESS` | all environments | `0x87B9AfEafA109e96c41504E0ce84e08c055D5eaf` |
-| `NEXT_PUBLIC_PARA_API_KEY` | all environments | optional; empty falls back to an injected wallet |
-| **`VERIFIER_PRIVATE_KEY`** | **all environments** | **never prefixed `NEXT_PUBLIC_`** |
-| `GITHUB_TOKEN` | all environments | optional, raises the API rate limit |
-| `ANTHROPIC_API_KEY` | all environments | optional; a BYOK header wins over it |
+| `NEXT_PUBLIC_FACTORY_ADDRESS` | the whole app | `hasFactory()` false → "no factory configured". Set after A-4 |
+| `NEXT_PUBLIC_VERIFIER_ADDRESS` | showing who signed | blank; UI cannot name the signer. `0x87B9AfEafA109e96c41504E0ce84e08c055D5eaf` |
+| `NEXT_PUBLIC_PARA_API_KEY` | wallet choice | empty falls back to an injected wallet. Optional |
+| `NEXT_PUBLIC_SITE_URL` | OG tags, absolute links | falls back to `VERCEL_URL`, so **safe to leave unset on Vercel** |
+| **`VERIFIER_PRIVATE_KEY`** | **`/api/verify` at all** | route returns **502** "the verifier signing key is not available; this is our configuration" |
+| **`MONAD_RPC_URL`** | the verify route's onchain binding check | route returns **502** "the verifier has no RPC endpoint configured". `https://testnet-rpc.monad.xyz` |
+| `GITHUB_TOKEN` | `github` check rate limit | anonymous limit; a 403 is reported as 502, never as a failing milestone. Optional |
+| `ANTHROPIC_API_KEY` | AI parser without BYOK | falls through to the deterministic template, which must always work. Optional |
+
+Two of those are **not in C8** — `MONAD_RPC_URL` and `NEXT_PUBLIC_SITE_URL`. C8 lists
+`NEXT_PUBLIC_MONAD_TESTNET_RPC`, but the verify route deliberately uses a **server-side**
+`MONAD_RPC_URL` instead, which is the better call: the verifier's RPC is not the browser's, and
+a server route has no business reading a `NEXT_PUBLIC_` variable. C8 has been amended to match
+the code rather than the other way round.
+
+**Set the two secrets yourself.** I will not paste `VERIFIER_PRIVATE_KEY` into a web form —
+handling a private key in plain text is off-limits for me regardless of who asks. It is in
+`web/.env.local` on your machine; copy it from there into Vercel as `VERIFIER_PRIVATE_KEY`,
+with no prefix.
+
+Worth noticing in the code, because it is the reason a missing key is survivable: env is read
+**inside the request handler**, not at module scope. A deploy with no key still builds and
+still serves every page — only `/api/verify` fails, with a named 502 that says the fault is
+ours rather than the freelancer's. That is C6's 422-vs-502 rule holding at the configuration
+layer, which is a nicer piece of design than it first looks.
 
 Next.js inlines **every** `NEXT_PUBLIC_`-prefixed variable into the client bundle at build
 time. There is no runtime check and no warning — a key pasted into a field named

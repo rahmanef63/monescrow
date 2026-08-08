@@ -230,8 +230,34 @@ against the total.
 | `NEXT_PUBLIC_VERIFIER_ADDRESS` | client | Alfa | UI shows who signed |
 | `NEXT_PUBLIC_PARA_API_KEY` | client | Alfa | empty ⇒ injected-wallet fallback |
 | `VERIFIER_PRIVATE_KEY` | **server only** | Alfa | never `NEXT_PUBLIC_`, never committed |
+| `MONAD_RPC_URL` | **server only** | Alfa | the verify route's own RPC — *added 2026-08-08* |
+| `NEXT_PUBLIC_SITE_URL` | client | Alfa | this app's public origin; now explicit for Convex — *added 2026-08-08* |
+| `NEXT_PUBLIC_CONVEX_URL` | client | Alfa | Convex deployment, `*.convex.cloud` — *added 2026-08-08* |
+| `NEXT_PUBLIC_CONVEX_SITE_URL` | client | Alfa | Convex HTTP actions, `*.convex.site` — *added 2026-08-08* |
+| `CONVEX_DEPLOY_KEY` | **server only** | user | never `NEXT_PUBLIC_`, never committed — *added 2026-08-08* |
 | `GITHUB_TOKEN` | server only | Taskforce | optional; raises the rate limit |
 | `ANTHROPIC_API_KEY` | server only | user | optional; BYOK header wins |
+
+**Amendment, 2026-08-08.** The two rows marked *added* were found in the code during a Vercel
+env audit and were not in this table. `MONAD_RPC_URL` is the more interesting one:
+`/api/verify` needs an RPC to run its onchain binding check, and C8 originally offered only
+`NEXT_PUBLIC_MONAD_TESTNET_RPC`. Taskforce used a server-side variable instead, which is
+right — the verifier's endpoint is not the browser's, and a server route should never read a
+`NEXT_PUBLIC_` value. C8 is amended to match the code rather than the code bent back to C8.
+Missing either one is not a build failure: env is read inside the handler, so the route
+returns a named **502** and the rest of the app is unaffected.
+
+**Convex amendment, 2026-08-08.** C3, C4 and C5 all say their documents live off-chain with
+only a keccak hash on-chain — and until now *nothing actually stored them*. Convex fills that
+hole, and that is the whole of its remit.
+
+**What Convex is explicitly not for: listing escrows.** `EscrowFactory` maintains its own
+onchain index (`escrows`, `escrowsOf`, `getEscrows`) for the stated reason that a frontend
+should enumerate jobs with plain `eth_call`s — no indexer, no backend. If the job list ever
+starts reading from Convex, the product has acquired a backend it cannot justify and the
+"turn our servers off and your escrow still works" claim stops being true. A useful test: with
+the Convex deployment paused, every job must still list and every milestone must still be
+releasable. Only the human-readable criteria/evidence/report text should degrade.
 
 Anything without `NEXT_PUBLIC_` must never be read from a client component. `.env.example`
 is committed; `.env.local` never is.

@@ -1,0 +1,83 @@
+# Vercel → monescrow → Settings → Environment Variables
+#
+# Paste each row as a separate variable. Scope all of them to
+# Production + Preview + Development unless noted.
+#
+# Derived from what web/src actually reads (audited 2026-08-08), not from the C8
+# table — two of these were missing from C8 and it has since been amended to match.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# SAFE TO PASTE ANYWHERE — these are public by design
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Who signs attestations. Public on purpose: the UI shows it so anyone reading a
+# job can check the signature came from the expected key, and
+# Escrow.attestationDigest(...) lets them reproduce the digest byte-for-byte.
+NEXT_PUBLIC_VERIFIER_ADDRESS=0x87B9AfEafA109e96c41504E0ce84e08c055D5eaf
+
+# The verify route's own RPC. Server-side on purpose — the verifier's endpoint is
+# not the browser's, and a server route should never read a NEXT_PUBLIC_ value.
+MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+
+# The browser's RPC.
+NEXT_PUBLIC_MONAD_TESTNET_RPC=https://testnet-rpc.monad.xyz
+
+# Set this after A-4, once the factory is deployed and verified. Until then the
+# app correctly renders "no factory configured" rather than "you have no jobs" —
+# those are different facts and the UI refuses to confuse them.
+NEXT_PUBLIC_FACTORY_ADDRESS=
+
+# Empty falls back to an injected wallet (MetaMask, Rabby, …). Optional.
+NEXT_PUBLIC_PARA_API_KEY=
+
+# --- Convex (public half) ----------------------------------------------------
+# Off-chain store for the C3/C4/C5 documents the contract commits to by hash.
+# Get both from the Convex dashboard → your deployment. Same subdomain, different TLD.
+NEXT_PUBLIC_CONVEX_URL=https://<your-deployment>.convex.cloud
+NEXT_PUBLIC_CONVEX_SITE_URL=https://<your-deployment>.convex.site
+
+# This app's public origin. Was previously safe to omit (falls back to VERCEL_URL);
+# Convex HTTP actions want a stable origin, so it is now explicit.
+NEXT_PUBLIC_SITE_URL=https://monescrow.vercel.app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECRETS — paste these yourself, from web/.env.local
+# ─────────────────────────────────────────────────────────────────────────────
+
+# The verifier's signing key. Copy the value out of web/.env.local.
+#
+# NEVER prefix this NEXT_PUBLIC_. Next.js inlines every NEXT_PUBLIC_ variable
+# into the client bundle at build time — no runtime check, no warning — so a key
+# in a field named NEXT_PUBLIC_VERIFIER_PRIVATE_KEY is published to every visitor
+# permanently, and rotating it afterwards does not un-publish the builds that
+# already shipped.
+#
+# Without it /api/verify returns 502 "the verifier signing key is not available;
+# this is our configuration". Every other route keeps working — env is read inside
+# the handler, not at module scope.
+VERIFIER_PRIVATE_KEY=
+
+# Convex deployment credential. Paste this one yourself — it can push code and read
+# data on the deployment. Never with a NEXT_PUBLIC_ prefix.
+CONVEX_DEPLOY_KEY=
+
+# Optional. Raises the GitHub API rate limit for the `github` milestone check.
+# Without it the check still works on the anonymous limit, and a 403 is reported
+# as 502 (retry), never as a failing milestone.
+GITHUB_TOKEN=
+
+# Optional. BYOK: a key sent in the x-llm-key header wins over this, and this wins
+# over the deterministic template parser. All three paths must work — the template
+# is what runs on a judge's machine with no credentials at all.
+ANTHROPIC_API_KEY=
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LEAVE UNSET ON VERCEL
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# NEXT_PUBLIC_SITE_URL   falls back to VERCEL_URL, which Vercel provides
+# NEXT_PUBLIC_BUILD_ID   falls back to VERCEL_DEPLOYMENT_ID
+# VERCEL_GIT_COMMIT_SHA  provided by Vercel
+#
+# Verify after the first deploy that the key did not reach the browser:
+#   curl -s https://monescrow.vercel.app/ | grep -c '<the key>'    # must print 0

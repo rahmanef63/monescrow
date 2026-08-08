@@ -1841,3 +1841,35 @@ event name and the sheet's own copy in the same shipped client chunk.
 Evidence: `npx vitest run` → 703 passed, 21 files · `npx tsc --noEmit` → exit 0 with no `.next` · `npx next build` clean · host-gate test loops all 9 providers · two-tool-result translation asserted · reference studied at `models-rahmanef-com@main`
 Unblocks: a judge holding an OpenAI, OpenRouter, Groq, Gemini, DeepSeek, xAI, Mistral or GitHub Models key now gets a working assistant instead of silence
 Files: web/src/lib/models/**, web/src/app/api/chat/route.ts, web/src/app/layout.tsx, TASKS.md
+
+## 2026-08-08T09:14Z · A · DECIDE
+**Convex added to C8 — as the store for the hash-committed documents, and nothing else.**
+Four variables: `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, `NEXT_PUBLIC_SITE_URL`
+(now explicit), and `CONVEX_DEPLOY_KEY` (server only). Written into `web/.env.example`,
+`deploy/vercel-env.example` and the C8 table.
+
+**This closes a real hole rather than adding a dependency for its own sake.** C3, C4 and C5 all
+say their JSON lives off-chain with only a keccak hash on-chain — and nothing has ever actually
+stored it. The criteria both parties agreed to, the freelancer's evidence, the verifier's
+report: all committed to by hash, none retrievable. Convex is where they go.
+
+**Scope limit, recorded now because it will be tempting to cross later.** Convex must never
+become the source for *listing* escrows. `EscrowFactory` keeps an onchain index precisely so a
+frontend can enumerate jobs with plain `eth_call`s — no indexer, no backend. The moment the job
+list reads from a database, "turn our servers off and your escrow still works" stops being
+true, and that claim is a good part of why the design is worth anything.
+
+Wrote it as a runnable check: **pause the Convex deployment and every job must still list and
+every milestone must still be releasable.** Only the human-readable text should degrade. That
+is a test somebody can actually perform, which is the only kind of architectural rule that
+survives contact with a deadline.
+
+Set `NEXT_PUBLIC_SITE_URL=https://monescrow.vercel.app` in Vercel (201, all three
+environments). It was previously left unset on purpose because it falls back to `VERCEL_URL`;
+Convex HTTP actions want a stable non-preview origin, so it now has a reason to exist.
+
+The two Convex URLs need values only the human can read off the Convex dashboard, and
+`CONVEX_DEPLOY_KEY` is a credential A will not handle — it can push code and read data on the
+deployment, which makes it strictly more dangerous than the verifier key.
+Evidence: `POST /api/v10/projects/monescrow/env` → 201, created `NEXT_PUBLIC_SITE_URL` · C8 amended with four rows and a scope limit
+Files: web/.env.example, deploy/vercel-env.example, docs/01-INTERFACES.md
