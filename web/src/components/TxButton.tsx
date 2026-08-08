@@ -134,7 +134,7 @@ export function TxButton({
 
       {/* One live region for everything the button wants to say. Screen readers hear the cost,
           the block reason and the outcome without the button label churning underneath them. */}
-      <div id={statusId} aria-live="polite" className="mt-2 flex flex-col gap-1 text-xs leading-relaxed">
+      <div id={statusId} aria-live="polite" className="mt-2 flex flex-col gap-1 text-sm leading-relaxed">
         {phase === 'ready' && costLabel ? (
           <p className="text-[#f4f4f5]">
             <span className="font-semibold tabular-nums">{costLabel}</span>

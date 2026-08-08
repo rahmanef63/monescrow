@@ -195,7 +195,7 @@ export function Countdown({
         <p className="mt-1 text-zinc-100">
           {boundaryVerb} <span className="font-medium">{formatAbsolute(releasableAt)}</span>
         </p>
-        <p className="mt-1 text-xs text-zinc-400">{runningDetail}</p>
+        <p className="mt-1 text-sm text-zinc-400">{runningDetail}</p>
       </>,
     )
   }
@@ -238,7 +238,7 @@ export function Countdown({
         {/* `aria-live="off"`: eight digits changing every second is noise, not information.
             The coarse phrase beside it is what a screen reader actually reads. */}
         <p role="timer" aria-live="off" className="min-w-0">
-          <span aria-hidden="true" className="font-mono text-lg tabular-nums text-zinc-100">
+          <span aria-hidden="true" className="font-mono text-2xl tabular-nums text-zinc-100">
             {formatRemaining(remaining)}
           </span>
           <span className="sr-only">{coarseRemaining(remaining)} in the challenge window</span>

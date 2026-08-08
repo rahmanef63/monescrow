@@ -452,7 +452,7 @@ export default function NewJobPage() {
           <h2 id="s-brief" className="mb-1 text-base font-semibold text-zinc-100">
             1 · What the job is
           </h2>
-          <p className="mb-4 text-xs text-zinc-500">
+          <p className="mb-4 text-sm text-zinc-500">
             The title goes on-chain. The brief does not — it is only used to propose a split, and
             its hash is folded into the terms hash so neither of you can rewrite it later.
           </p>
@@ -595,7 +595,7 @@ export default function NewJobPage() {
           <h2 id="s-parties" className="mb-1 text-base font-semibold text-zinc-100">
             2 · Who is involved
           </h2>
-          <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+          <p className="mb-4 text-sm leading-relaxed text-zinc-500">
             You are the client, because you are the wallet sending this transaction — the contract
             takes it from <code className="font-mono">msg.sender</code> and never from calldata.
           </p>
@@ -644,7 +644,7 @@ export default function NewJobPage() {
               <span className="font-mono text-zinc-100">
                 {verifierSet ? shortAddress(VERIFIER_ADDRESS) : 'not configured'}
               </span>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              <p className="mt-1 text-sm leading-relaxed text-zinc-500">
                 The verifier only ever <em className="not-italic font-medium text-zinc-400">proposes</em>{' '}
                 that a milestone passed. It cannot release anything, cannot take anything, and its
                 attestation is what opens your challenge window — not what ends it.
@@ -664,7 +664,7 @@ export default function NewJobPage() {
 
           <fieldset className="mt-4">
             <legend className={LABEL}>Challenge window</legend>
-            <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-1 mb-3 text-sm leading-relaxed text-zinc-500">
               After a verifier attests a milestone, this is how long you have to object. Say
               nothing and anyone — you, the freelancer, a stranger — can trigger the release. The
               contract accepts 60 seconds to 30 days, so this is a fixed list rather than a box
@@ -714,7 +714,7 @@ export default function NewJobPage() {
             <label className={LABEL} htmlFor="deadline">
               Deadline
             </label>
-            <p className="mt-1 mb-2 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-1 mb-2 text-sm leading-relaxed text-zinc-500">
               After this, the freelancer can no longer submit and you can reclaim anything still
               Pending or Submitted. An attested milestone survives it — work proven in time is not
               undone by the clock.
@@ -760,7 +760,7 @@ export default function NewJobPage() {
           <h2 id="s-split" className="mb-1 text-base font-semibold text-zinc-100">
             4 · The split
           </h2>
-          <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+          <p className="mb-4 text-sm leading-relaxed text-zinc-500">
             Each milestone is funded now and released on its own. Editing any of it is the point —
             nothing here is agreed until you both act on it.
           </p>
@@ -832,7 +832,7 @@ function AddressField({
         aria-describedby={`${id}-note`}
         onChange={(e) => onChange(e.target.value)}
       />
-      <p id={`${id}-note`} className="mt-1 text-xs leading-relaxed">
+      <p id={`${id}-note`} className="mt-1 text-sm leading-relaxed">
         {error ? <span className="text-danger">{error}</span> : <span className="text-zinc-500">{hint}</span>}
       </p>
     </div>

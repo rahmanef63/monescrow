@@ -256,7 +256,7 @@ export function ConnectButton({ compact = false, className }: ConnectButtonProps
           </button>
         </div>
         {switchError ? (
-          <p role="alert" className="text-xs text-danger">
+          <p role="alert" className="text-sm text-danger">
             {messageOf(switchError)} {manualChainHint()}
           </p>
         ) : null}
@@ -334,7 +334,7 @@ export function ConnectButton({ compact = false, className }: ConnectButtonProps
       </p>
 
       {connectErrorText ? (
-        <p role="alert" className="text-xs text-danger">
+        <p role="alert" className="text-sm text-danger">
           {connectErrorText}
         </p>
       ) : null}

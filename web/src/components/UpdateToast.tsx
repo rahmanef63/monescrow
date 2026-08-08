@@ -104,7 +104,7 @@ export function UpdateToast() {
       {show ? (
         <div className="pointer-events-auto w-full max-w-sm rounded-xl border border-[#27272a] bg-[#18181b] p-3 shadow-lg shadow-black/50">
           <p className="text-sm font-semibold text-[#f4f4f5]">A new version is available</p>
-          <p className="mt-1 text-xs leading-relaxed text-[#a1a1aa]">
+          <p className="mt-1 text-sm leading-relaxed text-[#a1a1aa]">
             Reloading clears the cached app files and starts the new build. Nothing on this page
             is saved for you, so finish what you are typing first.
           </p>

@@ -292,7 +292,7 @@ function Group({
           {rows.length}
         </span>
       </h2>
-      <p className="mt-1 text-xs leading-relaxed text-zinc-400">{skin.blurb}</p>
+      <p className="mt-1 text-sm leading-relaxed text-zinc-400">{skin.blurb}</p>
 
       <ul className="mt-3 flex flex-col gap-3">
         {rows.map((row) => (
@@ -319,7 +319,7 @@ function Row({ row, now, source }: { row: Awaiting; now: number; source: JobsSou
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <Link
           href={jobHref(row.job)}
-          className="min-w-0 text-xs font-medium break-words text-zinc-400 underline-offset-4 hover:text-zinc-100 hover:underline"
+          className="min-w-0 text-sm font-medium break-words text-zinc-400 underline-offset-4 hover:text-zinc-100 hover:underline"
         >
           {row.job.untrusted.title || 'Untitled job'}
         </Link>
@@ -337,7 +337,7 @@ function Row({ row, now, source }: { row: Awaiting; now: number; source: JobsSou
           </span>
         ) : null}
       </h3>
-      <p className="mt-1 text-xs leading-relaxed break-words text-zinc-400">
+      <p className="mt-1 text-sm leading-relaxed break-words text-zinc-400">
         {actionRationale(row)}
       </p>
 
@@ -370,7 +370,7 @@ function Row({ row, now, source }: { row: Awaiting; now: number; source: JobsSou
 
       {/* -------------------------------------------------------------- the client's other option */}
       {row.group === 'clock' && row.role === 'client' ? (
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
           You do not have to wait. Until the window closes you can approve milestone{' '}
           {(row.milestone ?? 0) + 1} to pay it out now, or dispute it to freeze it for the arbiter
           — both live on{' '}
@@ -382,7 +382,7 @@ function Row({ row, now, source }: { row: Awaiting; now: number; source: JobsSou
       ) : null}
 
       {row.action === 'withdraw' ? (
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
           {formatMon(row.job.owed)} MON is credited to you inside this escrow. This is the
           transaction that actually moves it into your wallet.
         </p>

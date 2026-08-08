@@ -561,7 +561,7 @@ function MilestoneRow({ milestone, index, count, disabled, onPatch, onRemove, on
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{CHECK_NOTE[milestone.check]}</p>
+          <p className="mt-1 text-sm leading-relaxed text-zinc-500">{CHECK_NOTE[milestone.check]}</p>
         </div>
 
         <div>

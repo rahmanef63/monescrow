@@ -595,7 +595,7 @@ function Intro({ connected }: { connected: boolean }) {
 /** Said once, the first time a card shows up. It is the argument the whole product makes. */
 function ProposeNotice() {
   return (
-    <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2.5 text-xs leading-relaxed text-zinc-100">
+    <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm leading-relaxed text-zinc-100">
       <span className="font-semibold">The assistant proposes; you press.</span> A card is a
       description of a button, checked against the escrow’s own rules before it was built. Pressing
       one simulates the call, shows you the exact gas cost, and waits for a second, deliberate

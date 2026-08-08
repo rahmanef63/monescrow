@@ -718,7 +718,7 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
   if (!valid) {
     return (
       <div className={`${CARD} mx-auto max-w-xl p-5`}>
-        <h1 className="text-lg font-semibold text-zinc-100">That is not an escrow address</h1>
+        <h1 className="text-2xl font-semibold text-zinc-100">That is not an escrow address</h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-400">
           A MonEscrow job lives at its own contract address, so the link should end in a 42
           character address starting <code className="font-mono text-xs">0x</code>. This one ends
@@ -762,7 +762,7 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
         {/* ============================================================= the job, at a glance */}
         <div className="min-w-0 lg:sticky lg:top-24">
           <header className={`${CARD} p-4`}>
-            <h1 className="text-xl leading-tight font-bold text-balance text-zinc-100">
+            <h1 className="text-2xl leading-tight font-bold text-balance text-zinc-100">
               {job.title}
             </h1>
 
@@ -942,7 +942,7 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
               </ul>
             )}
 
-            <p className="mt-4 text-xs leading-relaxed text-zinc-400">
+            <p className="mt-4 text-sm leading-relaxed text-zinc-400">
               Blocked actions stay on the page on purpose. Seeing that only the client can cancel,
               and why, is how everybody learns the rules of the thing they signed.
             </p>

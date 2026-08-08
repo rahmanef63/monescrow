@@ -67,7 +67,7 @@ import {
   DEFAULT_MODEL,
   type LlmFetch,
 } from '@/lib/ai/anthropic'
-import { resolveCredential, type EnvLike, type HeadersLike } from '@/lib/ai/provider'
+import { LLM_KEY_HEADER, resolveCredential, type EnvLike, type HeadersLike } from '@/lib/ai/provider'
 import type { Credential } from '@/lib/ai/types'
 import { escrowAbi } from '@/lib/abis'
 import { monadTestnet } from '@/lib/chain'
@@ -837,6 +837,11 @@ export function createChainReader(): Pick<ChatDeps, 'readJob' | 'readOwed'> {
  * redirect somebody's key to a host the caller chose. The model reference comes from
  * `x-llm-model` (`provider/model`, or a bare `provider` for its default); absent, it stays
  * Anthropic, which is what every existing caller assumes.
+ *
+ * That host gate keeps the key away from an *arbitrary* URL, but it does not decide *whose* key
+ * is being routed — every registry host is a real endpoint at a different company. So `POST`
+ * only forwards a caller-supplied ref when the caller also supplied the key; see the comment
+ * there. This function assumes that has already been decided and does not re-check it.
  */
 function createByokChatTransport(modelRef: string, fetchImpl: LlmFetch): ChatTransport {
   return async (req: TransportRequest): Promise<TransportReply> => {
@@ -852,6 +857,22 @@ function createByokChatTransport(modelRef: string, fetchImpl: LlmFetch): ChatTra
   }
 }
 
+/** The header a caller uses to pick a provider and model, `provider/model`. */
+export const MODEL_HEADER = 'x-llm-model'
+
+/**
+ * Which model reference the caller is allowed to choose — and the answer is none of it, unless
+ * the key being routed is theirs.
+ *
+ * Extracted from `POST` and exported for exactly one reason: this is a security decision, and
+ * a security decision with no test that goes red when it is reverted is a comment. The test is
+ * `key-routing.test.ts`.
+ */
+export function callerModelRef(headers: HeadersLike): string {
+  const byok = (headers.get(LLM_KEY_HEADER) ?? '').trim() !== ''
+  return byok ? (headers.get(MODEL_HEADER) ?? '') : ''
+}
+
 export async function POST(request: Request): Promise<Response> {
   let body: unknown
   try {
@@ -863,13 +884,24 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const reader = createChainReader()
+
+  // A model reference chooses which *vendor* the credential is sent to, so it is only the
+  // caller's to choose when the credential is the caller's.
+  //
+  // With no `x-llm-key`, `handleChat` falls back to this server's `ANTHROPIC_API_KEY`. Honouring
+  // `x-llm-model` on that path let any anonymous POST redirect our own key to a different
+  // company: `x-llm-model: deepseek` and no key resolved the env Anthropic key and posted it to
+  // api.deepseek.com as a bearer token. The host gate in `resolveModel` cannot catch that — every
+  // one of those hosts is a legitimate registry entry, so the key never leaves for an
+  // attacker-controlled URL, it leaves for the wrong vendor's real one, which is enough to burn
+  // it. An empty ref means `normaliseRef`'s Anthropic default, which is the provider that env
+  // key actually belongs to. BYOK is unaffected: a caller who brought a key still picks its model.
+  const modelRef = callerModelRef(request.headers)
+
   const result = await handleChat(body, request.headers, {
     env: process.env,
     // The cast narrows the global fetch onto the POST-with-body seam declared above.
-    transport: createByokChatTransport(
-      request.headers.get('x-llm-model') ?? '',
-      globalThis.fetch as unknown as LlmFetch,
-    ),
+    transport: createByokChatTransport(modelRef, globalThis.fetch as unknown as LlmFetch),
     readJob: reader.readJob,
     ...(reader.readOwed ? { readOwed: reader.readOwed } : {}),
   })

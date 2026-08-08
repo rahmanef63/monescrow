@@ -96,14 +96,14 @@ export default function WalletPage() {
 
           <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
             <h3 className="text-xs font-medium text-zinc-400">In your wallet</h3>
-            <p className="mt-1 text-base font-semibold tabular-nums break-words text-zinc-100">
+            <p className="mt-1 text-2xl font-semibold tabular-nums break-words text-zinc-100">
               {balance.isPending
                 ? '…'
                 : balance.isError
                   ? 'unavailable'
                   : `${formatMon(balance.data?.value ?? 0n)} MON`}
             </p>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <p className="mt-0.5 text-sm text-zinc-400">
               Spendable now, and what pays for gas. Escrow balances are not counted here.
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function WalletPage() {
             </p>
           ) : null}
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+        <p className="mt-1 text-sm leading-relaxed text-zinc-400">
           Each escrow keeps its own ledger, so each one is withdrawn separately. There is no pooled
           balance and nothing sweeps them together.
         </p>
@@ -293,11 +293,11 @@ function OwedCard({ row, live }: { row: OwedRow; live: boolean }) {
       </div>
 
       <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-zinc-100">
-        <span className="text-xl font-bold tabular-nums">{formatMon(owed)} MON</span>
+        <span className="text-2xl font-bold tabular-nums">{formatMon(owed)} MON</span>
         <span className="text-xs text-zinc-400">credited to you inside this escrow</span>
       </p>
 
-      <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+      <p className="mt-1 text-sm leading-relaxed text-zinc-400">
         This escrow has released {formatMon(released)} MON
         {refunded > 0n ? ` and refunded ${formatMon(refunded)} MON` : ''} of{' '}
         {formatMon(job.totalAmount)} MON. Released means credited here, not sent — the transaction

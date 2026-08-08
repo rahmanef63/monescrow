@@ -644,7 +644,7 @@ export function JobCard({ job, viewer, now }: JobCardProps) {
 
         {/* --------------------------------------------------------- money + progress */}
         <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-zinc-100">
-          <span className="font-semibold tabular-nums">{formatMon(job.totalAmount)} MON</span>
+          <span className="text-2xl font-semibold tabular-nums">{formatMon(job.totalAmount)} MON</span>
           <span className="text-xs text-zinc-400">escrowed in total</span>
         </p>
         <p className="mt-0.5 text-xs text-zinc-400">
@@ -671,19 +671,19 @@ export function JobCard({ job, viewer, now }: JobCardProps) {
         <div className={`mt-3 min-w-0 rounded-xl border ${skin.box} p-3`}>
           <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${skin.dot}`} />
-            <span className={`text-xs font-semibold ${skin.text}`}>{urgency.label}</span>
+            <span className={`text-sm font-semibold ${skin.text}`}>{urgency.label}</span>
             {urgency.countdownTo !== undefined && now > 0 ? (
               <span className="rounded-md bg-zinc-950/60 px-1.5 py-0.5 text-xs font-medium text-zinc-100">
                 <Countdown to={urgency.countdownTo} now={now} /> left
               </span>
             ) : null}
           </p>
-          <p className="mt-1.5 text-xs leading-relaxed break-words text-zinc-400">
+          <p className="mt-1.5 text-sm leading-relaxed break-words text-zinc-400">
             {urgency.detail}
           </p>
         </div>
 
-        <p className="mt-3 text-xs font-medium text-accent-soft group-hover:text-accent">
+        <p className="mt-3 text-sm font-medium text-accent-soft group-hover:text-accent">
           Open this job <span aria-hidden="true">→</span>
         </p>
       </Link>

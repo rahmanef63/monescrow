@@ -177,7 +177,7 @@ export default function JobsPage() {
             })}
           </div>
 
-          <p className="mt-2 text-xs leading-relaxed text-zinc-400">{TAB_BLURB[tab]}</p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-400">{TAB_BLURB[tab]}</p>
 
           {shown.length === 0 ? (
             <EmptyState
@@ -201,7 +201,7 @@ export default function JobsPage() {
           )}
 
           {strangers > 0 ? (
-            <p className="mt-4 text-xs text-zinc-400">
+            <p className="mt-4 text-sm text-zinc-400">
               {strangers} more {strangers === 1 ? 'escrow is' : 'escrows are'} indexed against this
               address without giving it a role. Nothing on them is actionable by this wallet.
             </p>

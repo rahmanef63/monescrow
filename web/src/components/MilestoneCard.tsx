@@ -446,7 +446,7 @@ function BlockedAction({ label, reason }: { label: string; reason: string }) {
       >
         <span className="min-w-0 truncate">{label}</span>
       </button>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-400">{reason}</p>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-400">{reason}</p>
     </li>
   )
 }
@@ -521,7 +521,7 @@ export function MilestoneCard({
           <Pill tone={meta.tone}>{meta.label}</Pill>
         </div>
 
-        <p className="mt-2 font-mono text-xl tabular-nums text-zinc-100">
+        <p className="mt-2 font-mono text-2xl tabular-nums text-zinc-100">
           {formatMon(milestone.amount)}{' '}
           <span className="font-sans text-sm font-normal text-zinc-400">MON</span>
         </p>
@@ -752,7 +752,7 @@ export function MilestoneCard({
                       />
                     )}
                     {!sample && spec.unbuildable && onAction ? (
-                      <p className="mt-2 text-xs text-zinc-400">{spec.hint}</p>
+                      <p className="mt-2 text-sm text-zinc-400">{spec.hint}</p>
                     ) : null}
                   </li>
                 ))}
