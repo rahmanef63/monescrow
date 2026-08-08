@@ -101,6 +101,23 @@ contract Escrow is EIP712, ReentrancyGuardTransient {
     uint256 public constant MAX_MILESTONES = 20;
     uint256 public constant MAX_TITLE_BYTES = 120;
 
+    /// @notice Bounds on the challenge window. Both ends are load-bearing. (D-7)
+    /// @dev **Zero is the dangerous one.** With `challengeWindow == 0`, `release` computes
+    ///      `openUntil == attestedAt == block.timestamp`, so whoever holds the verifier key
+    ///      can `attest(passed=true)` and `release` in a single transaction and the client
+    ///      never gets a chance to `dispute`. That makes the off-chain verifier a unilateral
+    ///      authority over the client's funds — the exact thing this contract's design note
+    ///      says must never happen. A weak check is survivable only because the window
+    ///      exists; a zero window removes the mechanism while keeping the claim.
+    ///
+    ///      The upper bound is a liveness guard rather than a security one. `reclaim` accepts
+    ///      only Pending/Submitted, so an `Attested` milestone with an absurd window can
+    ///      neither be reclaimed after the deadline nor released until the window elapses —
+    ///      the funds sit with no exit but `approve` or `dispute`. `uint32` would otherwise
+    ///      allow ~136 years.
+    uint32 public constant MIN_CHALLENGE_WINDOW = 60;
+    uint32 public constant MAX_CHALLENGE_WINDOW = 30 days;
+
     /*//////////////////////////////////////////////////////////////
                                  STATE
     //////////////////////////////////////////////////////////////*/
@@ -168,6 +185,7 @@ contract Escrow is EIP712, ReentrancyGuardTransient {
     error FundingMismatch(uint256 expected, uint256 sent);
     error TitleEmpty();
     error TitleTooLong();
+    error ChallengeWindowOutOfRange(uint32 given, uint32 min, uint32 max);
 
     error NotClient();
     error NotFreelancer();
@@ -200,6 +218,9 @@ contract Escrow is EIP712, ReentrancyGuardTransient {
         if (client_ == p.freelancer) revert ClientIsFreelancer();
         if (p.arbiter == address(0)) revert ZeroAddress();
         if (p.deadline <= block.timestamp) revert DeadlineInPast();
+        if (p.challengeWindow < MIN_CHALLENGE_WINDOW || p.challengeWindow > MAX_CHALLENGE_WINDOW) {
+            revert ChallengeWindowOutOfRange(p.challengeWindow, MIN_CHALLENGE_WINDOW, MAX_CHALLENGE_WINDOW);
+        }
 
         uint256 len = ms.length;
         if (len == 0) revert NoMilestones();

@@ -56,7 +56,12 @@ parallel is listed below as unblocked.
 | A-22 | Delete duplicate `agent/` tree and the half-init `.git/` (needs Windows) | 🟡 `agent/` gone; `node_modules` symlink still to delete | human |
 | A-23 | `site/` holding page + `vercel.json` + `deploy/VERCEL.md` (D-4 reversal) | ✅ done | — |
 | A-24 | F-A fix in `EscrowFactory.getEscrows` — clamp before adding | ✅ done | — |
-| A-25 | F-B / D-7 contract change: bound `challengeWindow` | ⬜ **announced, awaiting D-7** | human |
+| A-25 | F-B / D-7 contract change: bound `challengeWindow` | ✅ done — 60 s … 30 days | — |
+| A-26 | Push `main` — **delegated to T**, A's mount cannot run git | ⬜ | T |
+
+**T's queue from A:** invert `ChallengeWindow.t.sol`'s zero-window test (it now reverts
+`ChallengeWindowOutOfRange(0, 60, 2592000)`), then commit and push everything unpushed. See
+the 06:25Z `HANDOFF`. Delete `.git/index.lock` and the `node_modules` symlink first.
 
 **Waiting on exactly one thing.** Every A task that does not touch the live chain is done.
 A-2 → A-3 → A-4 → A-5 → A-6 → A-7 → A-8 → A-11 → G2/G3/G4 all sit behind **D-1: one address**.
@@ -141,6 +146,6 @@ Things nobody should silently assume. Raise in `CHANGELOG.md` as a `DECIDE` entr
 | D-2 | Arbiter address for the demo escrows | human | 🟡 decided: same EOA as the second Safe owner — needs D-1's address |
 | D-3 | Default challenge window for the demo (short enough to show live) | A | ✅ **resolved** — product default 3 d, demo preset 90 s; see `deploy/DEMO-PARAMS.md` |
 | D-4 | Is a hosted deployment in scope, or clean-clone instructions only? | human | ✅ **reversed 05:58Z** — hosted **and** clean-clone. See `deploy/VERCEL.md`; `NEXT_PUBLIC_` scoping now matters |
-| D-7 | `challengeWindow == 0` lets the verifier key attest+release in one block | human | ⬜ **open — blocks A-3.** A recommends min 60 s / max 30 days |
+| D-7 | `challengeWindow == 0` lets the verifier key attest+release in one block | A | ✅ **resolved** — bounded 60 s … 30 days at construction; `ChallengeWindowOutOfRange` |
 | D-5 | Pin one `forge` version for all three workers | A | ✅ **resolved** — 1.7.1 @ `4072e487`, pinned in `contracts/foundry.toml`; upgrading is now a `DECIDE` |
 | D-6 | Where is the repository of record? No `.git` in this tree | human | 🟡 decided: **this directory** — but Alfa's mount denies `unlink`, so `git init` must be run natively on Windows. Exact commands in the 03:41Z changelog entry. |

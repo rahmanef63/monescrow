@@ -989,3 +989,70 @@ decision that moved rather than a stray file.
 Evidence: fresh `git clone` of origin/main into an empty directory → `forge test` 130 passed, `forge fmt --check` exit 0, sizes identical to the working tree · `make` → `command not found` · `forge install` OZ → `EXIT=1` with `fatal: cannot write keep file ...: Filename too long`, tree nevertheless complete at v5.7.0 and the suite green
 Unblocks: A can reproduce G1 from the commit rather than from this changelog
 Files: — (reporting on contracts/Makefile, DEMO.md, README.md — all A-owned)
+
+## 2026-08-08T06:24Z · A · DECIDE
+**D-7 resolved — `challengeWindow` is now bounded at 60 s … 30 days.** Decision taken on A's
+recommendation after the human delegated it. Announced here before editing, per the standing
+rule in `02-ALFA.md`, because it invalidates a test already written.
+
+```solidity
+uint32 public constant MIN_CHALLENGE_WINDOW = 60;
+uint32 public constant MAX_CHALLENGE_WINDOW = 30 days;
+// reverts ChallengeWindowOutOfRange(given, min, max)
+```
+
+Zero was the dangerous end and the reason for the change: at zero, whoever holds the verifier
+key calls `attest(passed=true)` and `release` in one block and the client is never consulted.
+The upper bound is liveness rather than security — `reclaim` takes only Pending/Submitted, so
+an `Attested` milestone with a `uint32`-sized window can neither be reclaimed after the
+deadline nor released for ~136 years.
+
+The argument for fixing it in the contract rather than the UI: the contract *is* the trust
+boundary. Anyone can call `createEscrow` directly, and "our frontend only offers 90 seconds
+and up" is not a property of a deployed contract. The whole pitch is that a weak check is
+survivable because the window exists; a reachable zero window removes the mechanism while
+keeping the claim.
+
+Verified in an isolated copy before touching `src/`: 0, 59 and `30 days + 1` all revert with
+the right selector and arguments; 60, 90, 3 days and 30 days are all accepted. Escrow runtime
+10,252 → 10,292 B, margin still 14,284.
+
+**Also retracted a second time:** `deploy/DEMO-PARAMS.md` said the contract does not constrain
+this and that zero is "T-4's job to test". Both that file and the security paragraph in
+`web/.env.example` are now corrected rather than quietly overwritten — the old claim is left
+visible with what replaced it, because a doc that silently changes its mind teaches nobody.
+Evidence: isolated `D7.t.sol` → 4/4 (zero, below-min, above-max all revert `ChallengeWindowOutOfRange`; 60/90/3d/30d accepted) · full suite → 121 passed, 1 failed, the failure being exactly the predicted one · `forge fmt --check` clean
+Invalidates: `ChallengeWindow.t.sol::test_ZeroChallengeWindowReleasesInTheAttestationBlock` · the `challengeWindow == 0` line in `docs/03-CLAUDE-CODE.md` (already amended)
+Files: contracts/src/Escrow.sol, docs/03-CLAUDE-CODE.md, deploy/DEMO-PARAMS.md, web/.env.example
+
+## 2026-08-08T06:25Z · A · HANDOFF
+**T — two things, and the second one is a favour A cannot do itself.**
+
+**1. One test to invert.** `ChallengeWindow.t.sol::test_ZeroChallengeWindowReleasesInTheAttestationBlock`
+now fails with `ChallengeWindowOutOfRange(0, 60, 2592000)`. Construction with a zero window is
+rejected outright, so the test should assert *that revert* rather than an immediate release.
+The boundary still needs covering: `59` and `30 days + 1` revert, `60` and `30 days` are
+accepted — the inclusive edges are the interesting cases. Everything else in your suite is
+untouched: 121 passing, `forge fmt --check` clean.
+
+Your `ChallengeWindow.t.sol` note about `releasableAt(i) != 0` while `challengeRemaining(i)`
+is 0 is now unreachable through the constructor, but the UI guidance still stands — read
+`challengeRemaining(i) > 0` to decide whether a countdown is running.
+
+**2. Please commit and push `main`.** A physically cannot: the Cowork mount denies `unlink`,
+which git needs for its index lock, so every `git add` from A stages zero files and leaves a
+stale `.git/index.lock` behind. (There is one there now, from an `A` ran `git status`. Delete
+it first: `rm -f .git/index.lock`.) You run natively on Windows, so this costs you one
+command and unblocks the Vercel deploy, which is currently importing a commit that predates
+everything below.
+
+Unpushed and waiting: `site/` (holding page), `vercel.json`, `deploy/VERCEL.md`,
+`deploy/DEMO-PARAMS.md`, the F-A clamp fix, the D-7 window bounds, `README.md`, `DEMO.md`,
+`contracts/Makefile`, `contracts/script/Deploy.s.sol`, `tools/relay/**`,
+`tools/check-mermaid.mjs`, `web/.env.example`.
+
+Please **fix the test first, then push**, so `main` never carries a red gate. And do not
+commit `node_modules` — it is a dangling symlink A left in the repo root; delete it.
+Evidence: `git status` from A's mount → `warning: unable to unlink .git/index.lock: Operation not permitted`, 0 files staged
+Blocks: G2 — Vercel and the Safe deployment both read from `main`
+Files: — (repo-level)

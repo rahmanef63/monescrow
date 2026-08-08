@@ -154,6 +154,52 @@ contract ConstructionTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
+                            CHALLENGE WINDOW (D-7)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev The two ends fail for different reasons and both are load-bearing. Below the
+    ///      floor the verifier can attest and release in one transaction, so the client
+    ///      never gets to object and the off-chain checker becomes a unilateral authority
+    ///      over their funds. Above the ceiling an Attested milestone can neither be
+    ///      reclaimed after the deadline nor released until the window elapses, so the money
+    ///      sits with no exit. These pin all four boundary seconds — an off-by-one at either
+    ///      end reopens one of those holes.
+    function test_ChallengeWindowBoundsAreInclusiveAtBothEnds() public {
+        uint32 min = Escrow(payable(address(_newEscrow()))).MIN_CHALLENGE_WINDOW();
+        uint32 max = Escrow(payable(address(_newEscrow()))).MAX_CHALLENGE_WINDOW();
+
+        assertEq(uint256(_escrowWithWindow(min).challengeWindow()), uint256(min), "the floor itself is legal");
+        assertEq(uint256(_escrowWithWindow(max).challengeWindow()), uint256(max), "the ceiling itself is legal");
+
+        _expectWindowRejected(min - 1, min, max);
+        _expectWindowRejected(max + 1, min, max);
+        _expectWindowRejected(0, min, max);
+    }
+
+    /// @dev Build an escrow at a given window. Reverts propagate to the caller.
+    function _escrowWithWindow(uint32 window) private returns (Escrow) {
+        Escrow.Params memory p = _params();
+        p.challengeWindow = window;
+        Escrow.MilestoneInit[] memory ms = _defaultMilestones();
+        return _createEscrow(client, p, ms, TOTAL);
+    }
+
+    /// @dev Every value is computed before the `expectRevert` line, never inline — the
+    ///      expectation arms the next call and a helper's view call would swallow it.
+    function _expectWindowRejected(uint32 window, uint32 min, uint32 max) private {
+        Escrow.Params memory p = _params();
+        p.challengeWindow = window;
+        Escrow.MilestoneInit[] memory ms = _defaultMilestones();
+        uint256 countBefore = factory.escrowCount();
+        bytes memory expected = abi.encodeWithSelector(Escrow.ChallengeWindowOutOfRange.selector, window, min, max);
+
+        vm.expectRevert(expected);
+        _createEscrow(client, p, ms, TOTAL);
+
+        assertEq(factory.escrowCount(), countBefore, "no escrow was deployed");
+    }
+
+    /*//////////////////////////////////////////////////////////////
                               MILESTONES
     //////////////////////////////////////////////////////////////*/
 

@@ -12,15 +12,23 @@ import {Escrow} from "../src/Escrow.sol";
 ///         when it starts, when it does not, what the countdown views tell the UI, and
 ///         exactly which second is the first releasable one.
 contract ChallengeWindowTest is BaseTest {
+    /// @dev Mirrors of the contract's bounds (D-7). Duplicated rather than read at runtime so
+    ///      they can be used in `Params` before an escrow exists;
+    ///      `test_MirroredBoundsMatchTheContract` fails if the contract ever moves them.
+    uint32 private constant MIN_WINDOW = 60;
+    uint32 private constant MAX_WINDOW = 30 days;
+
     /*//////////////////////////////////////////////////////////////
                             LOCAL FIXTURES
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev An accepted escrow whose challenge window is zero seconds — the "I trust the
-    ///      check, pay on green" configuration.
-    function _zeroWindowEscrow() private returns (Escrow e) {
+    /// @dev An accepted escrow whose window is exactly `MIN_CHALLENGE_WINDOW` — the shortest
+    ///      configuration the contract now allows, and the one the 90-second demo preset
+    ///      sits just above.
+    function _minWindowEscrow() private returns (Escrow e, uint32 window) {
+        window = MIN_WINDOW;
         Escrow.Params memory p = _params();
-        p.challengeWindow = 0;
+        p.challengeWindow = window;
         Escrow.MilestoneInit[] memory ms = _oneMilestone(M0, Escrow.Check.Http);
         e = _createEscrow(client, p, ms, _sum(ms));
         vm.prank(freelancer);
@@ -104,25 +112,58 @@ contract ChallengeWindowTest is BaseTest {
         assertEq(e.releasedAmount(), M0, "released total tracks the payout");
     }
 
-    /// A client who wants no waiting period can set the window to zero, and then a pass is
-    /// releasable in the very block it lands — no warp, no second transaction window.
-    function test_ZeroChallengeWindowReleasesInTheAttestationBlock() public {
-        Escrow e = _zeroWindowEscrow();
-        uint256 t0 = block.timestamp;
-        assertEq(e.challengeWindow(), 0, "escrow configured with no challenge window");
+    /// The two constants above are copies, and a copy that drifts is worse than no copy —
+    /// every bound test would keep passing against numbers the contract no longer uses.
+    function test_MirroredBoundsMatchTheContract() public {
+        Escrow e = _acceptedEscrow();
+        assertEq(uint256(e.MIN_CHALLENGE_WINDOW()), uint256(MIN_WINDOW), "min mirror is stale");
+        assertEq(uint256(e.MAX_CHALLENGE_WINDOW()), uint256(MAX_WINDOW), "max mirror is stale");
+    }
+
+    /// A zero window is refused at construction, and that refusal IS the mechanism. At zero,
+    /// `release` computes `openUntil == attestedAt == block.timestamp`, so whoever holds the
+    /// verifier key could attest and release in one transaction and the client would never
+    /// get to object — the verifier acting as a unilateral authority over somebody's funds,
+    /// which is the one thing this design says must never happen. Rejecting it in the
+    /// constructor is what stops the product's headline claim from being configurable away.
+    /// (D-7; this test previously asserted the opposite and was inverted when the bound
+    /// landed, so it stays here as the guard against the bound being removed again.)
+    function test_RevertWhen_ChallengeWindowIsZero() public {
+        Escrow.Params memory p = _params();
+        p.challengeWindow = 0;
+        Escrow.MilestoneInit[] memory ms = _oneMilestone(M0, Escrow.Check.Http);
+        uint256 value = _sum(ms);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Escrow.ChallengeWindowOutOfRange.selector, uint32(0), MIN_WINDOW, MAX_WINDOW)
+        );
+        _createEscrow(client, p, ms, value);
+    }
+
+    /// The shortest legal window still behaves like a window: nothing releases inside it,
+    /// everything releases once it elapses. This is the configuration the 90-second demo
+    /// preset sits just above, so if the floor were ever raised past the preset the demo
+    /// would break here rather than on camera.
+    function test_MinimumWindowStillHoldsTheMoneyUntilItElapses() public {
+        (Escrow e, uint32 window) = _minWindowEscrow();
+        assertEq(e.challengeWindow(), window, "escrow runs the shortest legal window");
 
         _submitAndPass(e, 0);
-        assertEq(block.timestamp, t0, "attested without any time passing");
-        assertEq(e.releasableAt(0), uint64(t0), "releasable the instant it is attested");
-        assertEq(e.challengeRemaining(0), 0, "nothing left to wait for");
+        uint64 openUntil = e.releasableAt(0);
+        assertEq(openUntil, uint64(block.timestamp) + window, "window opens on attestation");
+        assertEq(e.challengeRemaining(0), window, "the full window is left");
 
+        vm.warp(openUntil - 1);
+        vm.expectRevert(abi.encodeWithSelector(Escrow.ChallengeWindowOpen.selector, openUntil));
+        e.release(0);
+        assertEq(uint256(_state(e, 0)), uint256(Escrow.MState.Attested), "still frozen one second early");
+
+        vm.warp(openUntil);
         vm.prank(stranger);
         e.release(0);
 
-        assertEq(block.timestamp, t0, "released in the same block as the attestation");
-        assertEq(uint256(_state(e, 0)), uint256(Escrow.MState.Released), "released immediately");
+        assertEq(uint256(_state(e, 0)), uint256(Escrow.MState.Released), "released once the window elapsed");
         assertEq(e.owed(freelancer), M0, "freelancer credited");
-        assertEq(e.releasedAmount(), M0, "released total tracks the payout");
     }
 
     /*//////////////////////////////////////////////////////////////

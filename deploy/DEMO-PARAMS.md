@@ -30,9 +30,17 @@ So `/new` offers:
 A wallet popup can eat 20 seconds on its own, and A-7 has to dispute *inside* the window
 on the first take. 60 leaves no margin; 90 costs nine extra seconds of narration.
 
-The contract does not constrain this — `challengeWindow` is a plain `uint32` with no
-minimum, and `0` is legal and means "releasable immediately" (which is T-4's job to test).
-So this is UI policy, not a contract rule, and nothing here changes C1.
+**Corrected 2026-08-08 (D-7).** This section originally said the contract does not constrain
+the window and that `0` is legal — "releasable immediately, T-4's job to test." That reading
+was wrong in a way that mattered: at zero, whoever holds the verifier key can `attest` and
+`release` in the same block, so the client never gets to object and the verifier becomes a
+unilateral authority over their funds. It was not an edge case, it was a reachable
+configuration in which the product's headline claim is untrue.
+
+`Escrow` now rejects any window outside **`MIN_CHALLENGE_WINDOW` 60 s … `MAX_CHALLENGE_WINDOW`
+30 days** at construction, reverting `ChallengeWindowOutOfRange(given, min, max)`. Every
+preset in the table above sits inside that range, so the UI policy is unchanged — it is now
+backed by the contract rather than by the frontend's good manners.
 
 ## Deadline
 
