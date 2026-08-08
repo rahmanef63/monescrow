@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+/**
+ * MonEscrow theme.
+ *
+ * The palette is Tailwind's `zinc` ramp on purpose — #09090b is zinc-950, #18181b is zinc-900,
+ * #27272a is zinc-800, #f4f4f5 is zinc-100, #a1a1aa is zinc-400 — so sibling components can
+ * write `bg-zinc-950` / `text-zinc-400` and land exactly on Studio's surface. Only the tokens
+ * Tailwind does not already ship are declared here.
+ *
+ * Status colour never travels alone: `warning` means a live challenge window, not danger, and
+ * every use of it in the UI is paired with words that say so.
+ */
+@theme {
+  --color-accent: #836ef9; /* Monad purple — primary actions */
+  --color-accent-soft: #a897fb; /* accent on dark, when 4.5:1 text contrast is needed */
+  --color-success: #34d399; /* released, passed */
+  --color-warning: #fbbf24; /* challenge window running */
+  --color-danger: #f87171; /* disputed, failed */
+
+  /* System UI stack only. A webfont costs load time for nothing here. */
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+}
+
+/* The same palette as plain custom properties, for inline styles and canvas/SVG work. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark; /* dark by default — scrollbars and form controls included */
+
+  --mon-bg: #09090b;
+  --mon-surface: #18181b;
+  --mon-border: #27272a;
+  --mon-text: #f4f4f5;
+  --mon-muted: #a1a1aa;
+  --mon-accent: #836ef9;
+  --mon-success: #34d399;
+  --mon-warning: #fbbf24;
+  --mon-danger: #f87171;
+
+  /* Height of the mobile dock, excluding the safe area. Read by `pb-dock`. */
+  --mon-dock-h: 4rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background-color: var(--mon-bg);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--mon-bg);
+  color: var(--mon-text);
+  font-family: var(--font-sans);
+  /* `clip`, not `hidden`: no sideways drag at 380px, and `position: sticky` keeps working. */
+  overflow-x: clip;
+}
+
+/* Visible focus on every interactive thing, against #09090b. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--mon-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--mon-accent) 40%, transparent);
+  color: var(--mon-text);
+}
+
+/* Safe-area helpers — the dock sits on top of the iOS home indicator without them. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Bottom padding that clears the mobile dock, its raised centre slot and the safe area. */
+@utility pb-dock {
+  padding-bottom: calc(var(--mon-dock-h) + env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

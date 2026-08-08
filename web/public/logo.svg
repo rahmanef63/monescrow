@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="284" height="64" viewBox="0 0 284 64" role="img" aria-labelledby="title desc">
+  <title id="title">MonEscrow</title>
+  <desc id="desc">MonEscrow wordmark with a segmented progress lock.</desc>
+  <g transform="translate(0 0)">
+    <path d="M19 28V20c0-8 5-13 13-13s13 5 13 13v3" fill="none" stroke="#f4f4f5" stroke-width="6" stroke-linecap="round"/>
+    <rect x="8" y="25" width="48" height="31" rx="9" fill="#18181b" stroke="#f4f4f5" stroke-width="4"/>
+    <rect x="15" y="34" width="7" height="13" rx="2.5" fill="#836EF9"/><rect x="26" y="34" width="7" height="13" rx="2.5" fill="#836EF9"/><rect x="37" y="34" width="7" height="13" rx="2.5" fill="#836EF9"/><rect x="48" y="34" width="3" height="13" rx="1.5" fill="#34d399"/>
+  </g>
+  <text x="76" y="43" fill="#f4f4f5" font-family="system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="31" font-weight="700" letter-spacing="-1.2">MonEscrow</text>
+</svg>

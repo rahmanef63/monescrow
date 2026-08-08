@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "MonEscrow — milestone escrow for freelance work",
+  "short_name": "MonEscrow",
+  "description": "Fund a freelance job once, then release it milestone by milestone. A released milestone credits the recipient's balance inside the escrow; withdrawing it to a wallet is a separate step.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
