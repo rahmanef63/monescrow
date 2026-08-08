@@ -26,6 +26,13 @@
  *     transaction, and the "money to collect" group says so in as many words.
  */
 
+import {
+  Group as IosGroup,
+  GroupNote,
+  Pill,
+  Row as IosRow,
+  SectionHeader as IosSectionHeader,
+} from '@/components/ios'
 import Link from 'next/link'
 import { useMemo } from 'react'
 import { EmptyState } from '@/components/EmptyState'
@@ -163,7 +170,7 @@ export default function ActionsPage() {
   return (
     <div className="min-w-0">
       <header className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Actions</h1>
+        <h1 className="text-4xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">Actions</h1>
         <p className="mt-1 text-sm leading-relaxed text-zinc-400">
           Everything currently awaiting{' '}
           <span className="font-mono text-zinc-300">{shortAddress(renderViewer)}</span>, across
@@ -285,12 +292,10 @@ function Group({
 }) {
   const skin = GROUP[group]
   return (
-    <section className={`min-w-0 border-l-2 pl-3 sm:pl-4 ${skin.rule}`}>
-      <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-100">
+    <section className="min-w-0">
+      <h2 className="flex flex-wrap items-center gap-2 px-4 pt-6 pb-2 text-[13px] font-medium tracking-[0.02em] text-zinc-500 uppercase">
         {skin.title}
-        <span className={`rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums ${skin.pill}`}>
-          {rows.length}
-        </span>
+        <span className="text-[13px] tabular-nums text-zinc-600">{rows.length}</span>
       </h2>
       <p className="mt-1 text-sm leading-relaxed text-zinc-400">{skin.blurb}</p>
 

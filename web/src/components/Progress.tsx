@@ -121,7 +121,7 @@ export function WindowBand({ secondsLeft, role }: { secondsLeft: number; role: R
           <p className="text-[17px] font-semibold text-warning">Challenge window</p>
           <p className="mt-0.5 text-[13px] text-zinc-400">{line}</p>
         </div>
-        <p className="shrink-0 text-[28px] leading-none font-bold text-warning tabular-nums">
+        <p className="shrink-0 text-3xl leading-none font-bold text-warning tabular-nums">
           {clock(secondsLeft)}
         </p>
       </div>
@@ -224,15 +224,15 @@ export function ProgressHeader(props: { project: string; milestone: string; amou
   return (
     <div className="pt-1">
       <p className="text-[13px] text-zinc-500">Project</p>
-      <h1 className="text-[28px] leading-tight font-bold tracking-[-0.02em] text-zinc-50">{props.project}</h1>
+      <h1 className="text-3xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">{props.project}</h1>
       <div className="mt-3 flex items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[13px] text-zinc-500">Milestone</p>
-          <p className="truncate text-[20px] font-semibold text-zinc-100">{props.milestone}</p>
+          <p className="truncate text-xl font-semibold text-zinc-100">{props.milestone}</p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-[13px] text-zinc-500">{props.amountLabel}</p>
-          <p className="text-[20px] font-semibold text-zinc-100 tabular-nums">{props.amount}</p>
+          <p className="text-xl font-semibold text-zinc-100 tabular-nums">{props.amount}</p>
         </div>
       </div>
     </div>

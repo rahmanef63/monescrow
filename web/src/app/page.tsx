@@ -137,7 +137,7 @@ export default function JobsPage() {
   return (
     <div className="min-w-0">
       <header className="min-w-0 pt-1 pb-1">
-        <h1 className="text-[34px] leading-tight font-bold tracking-[-0.02em] text-zinc-50">Jobs</h1>
+        <h1 className="text-4xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">Jobs</h1>
       </header>
 
       <SourceNotice state={state} />

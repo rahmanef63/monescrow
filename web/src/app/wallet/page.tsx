@@ -19,6 +19,7 @@
  * The wallet is also the login, so this is where connecting lives. There is no account to create.
  */
 
+import { Group, GroupNote, Pill, Row, SectionHeader } from '@/components/ios'
 import Link from 'next/link'
 import { useMemo } from 'react'
 import { useBalance } from 'wagmi'
@@ -70,11 +71,7 @@ export default function WalletPage() {
   return (
     <div className="min-w-0">
       <header className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Wallet</h1>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-          Your address is your sign-in. It is also the ledger key every escrow uses to record what
-          it owes you.
-        </p>
+        <h1 className="text-4xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">Wallet</h1>
       </header>
 
       {/* ============================================================= connect / identity */}
@@ -85,29 +82,26 @@ export default function WalletPage() {
 
       {/* ============================================================= network + MON */}
       {viewer !== null ? (
-        <section className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h3 className="text-xs font-medium text-zinc-400">Network</h3>
-            <p className="mt-1 text-base font-semibold text-zinc-100">{monadTestnet.name}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">
-              Chain {monadTestnet.id} · {monadTestnet.nativeCurrency.symbol}
-            </p>
-          </div>
-
-          <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h3 className="text-xs font-medium text-zinc-400">In your wallet</h3>
-            <p className="mt-1 text-2xl font-semibold tabular-nums break-words text-zinc-100">
-              {balance.isPending
-                ? '…'
-                : balance.isError
-                  ? 'unavailable'
-                  : `${formatMon(balance.data?.value ?? 0n)} MON`}
-            </p>
-            <p className="mt-0.5 text-sm text-zinc-400">
-              Spendable now, and what pays for gas. Escrow balances are not counted here.
-            </p>
-          </div>
-        </section>
+        <>
+          <SectionHeader>Account</SectionHeader>
+          <Group>
+            <Row label="Network" value={monadTestnet.name} />
+            <Row label="Chain" value={String(monadTestnet.id)} />
+            <Row
+              label="In your wallet"
+              detail="Spendable now, and what pays for gas"
+              value={
+                balance.isPending
+                  ? "…"
+                  : balance.isError
+                    ? "unavailable"
+                    : `${formatMon(balance.data?.value ?? 0n)} MON`
+              }
+              last
+            />
+          </Group>
+          <GroupNote>Escrow balances are not counted here — those are held by each contract.</GroupNote>
+        </>
       ) : null}
 
       {/* ============================================================= the distinction */}

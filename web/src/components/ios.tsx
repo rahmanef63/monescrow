@@ -48,7 +48,7 @@ export function Screen({ title, trailing, children }: { title: string; trailing?
     <div className="-mx-4 min-h-full bg-zinc-950 px-4 pb-8">
       <header className="flex items-end justify-between gap-3 pt-2 pb-1">
         {/* Large title: iOS opens a screen with the name of the thing, set big and tight. */}
-        <h1 className="text-[34px] leading-tight font-bold tracking-[-0.02em] text-zinc-50">{title}</h1>
+        <h1 className="text-4xl leading-tight font-bold tracking-[-0.02em] text-zinc-50">{title}</h1>
         {trailing ? <div className="pb-2 shrink-0">{trailing}</div> : null}
       </header>
       {children}

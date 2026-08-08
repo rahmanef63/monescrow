@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { QR_TARGETS, type QrTargetKey } from '@/lib/qr'
 
 // ── copy-paste kit ───────────────────────────────────────────────────────────
 
@@ -213,6 +214,8 @@ function Copy({ label, value, multiline }: { label: string; value: string; multi
 export default function DemoConsole() {
   const [active, setActive] = useState(SCENARIOS[0].id)
   const [health, setHealth] = useState<Record<string, string>>({})
+  /** Which QR is blown up for the room. `null` shows the four-up grid. */
+  const [bigQr, setBigQr] = useState<QrTargetKey | null>(null)
 
   useEffect(() => {
     const probe = async () => {
@@ -254,6 +257,68 @@ export default function DemoConsole() {
         Presenter console
       </p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Demo script</h1>
+
+      {/* Scan targets. Put this on the projector when you want the room to follow along —
+          it is the one screen where an audience can act, so it stays above the fold. */}
+      <section className="mt-6">
+        <button
+          type="button"
+          onClick={() => setBigQr(bigQr ? null : 'app')}
+          className="min-h-11 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-300"
+        >
+          {bigQr ? '← back to the script' : 'Scan to follow along ↓'}
+        </button>
+
+        {bigQr ? (
+          <div className="mt-3 flex flex-col items-center rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={QR_TARGETS[bigQr].src}
+              alt={`QR code for ${QR_TARGETS[bigQr].url}`}
+              className="h-64 w-64 rounded-xl bg-white p-3"
+            />
+            <p className="mt-4 text-2xl font-bold">{QR_TARGETS[bigQr].label}</p>
+            <p className="mt-1 break-all font-mono text-sm text-zinc-400">
+              {QR_TARGETS[bigQr].url}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {(Object.keys(QR_TARGETS) as QrTargetKey[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setBigQr(k)}
+                  className={`min-h-11 rounded-full px-4 text-sm font-semibold transition ${
+                    k === bigQr
+                      ? 'bg-[#836EF9] text-black'
+                      : 'border border-zinc-800 bg-zinc-900 text-zinc-300'
+                  }`}
+                >
+                  {QR_TARGETS[k].label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(Object.keys(QR_TARGETS) as QrTargetKey[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => setBigQr(k)}
+                className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 transition hover:border-[#836EF9]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={QR_TARGETS[k].src}
+                  alt={`QR code for ${QR_TARGETS[k].url}`}
+                  className="w-full rounded-lg bg-white p-1.5"
+                />
+                <span className="mt-2 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {QR_TARGETS[k].label}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* preflight — the numbers row, per C11 */}
       <section className="mt-6 grid grid-cols-3 gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
