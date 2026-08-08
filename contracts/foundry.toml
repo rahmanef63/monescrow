@@ -1,0 +1,38 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+
+solc_version = "0.8.28"
+
+# D-5 — forge itself is pinned by agreement, not by config: Foundry cannot pin its own
+# version, and `forge fmt` output changes between releases. All three workers run
+#   forge 1.7.1, commit 4072e48705af9d93e3c0f6e29e93b5e9a40caed8
+# Confirmed independently on win32_amd64 (Taskforce) and linux_amd64 (Alfa). `src/Escrow.sol`
+# is formatted by that build. If you upgrade forge, `forge fmt` will rewrite files you did
+# not touch and G1 goes red for everyone — raise a DECIDE first.
+# Dependencies are pinned properly: forge-std v1.16.2 (bf647bd604),
+# openzeppelin-contracts v5.7.0 (cab19933c3).
+
+# Cancun, verified empirically against Monad testnet rather than assumed. Probing the
+# live chain with `eth_call` on raw init code:
+#   MCOPY  (EIP-5656)  0x6020600060405e600160005360206000f3      -> 0x01...  supported
+#   TSTORE (EIP-1153)  0x600760005d600060005c60005260206000f3    -> 0x07     supported
+# See `make probe-evm` to re-run the check.
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+bytecode_hash = "ipfs"
+
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/",
+]
+
+[rpc_endpoints]
+monad_testnet = "https://testnet-rpc.monad.xyz"
+
+# Monad testnet — chain id 10143.
