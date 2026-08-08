@@ -189,8 +189,27 @@ export function TxButton({
           </>
         ) : null}
 
+        {/*
+          The hint is available, not shouted.
+
+          Every action on a milestone card carried a sentence under it, and a card has up to
+          four actions — so the screen filled with explanation nobody was reading and the
+          buttons, which are the point, competed with prose for attention. The label already
+          says what the button does; the hint says why you would press it, which is a question
+          people ask once and then never again.
+
+          It stays reachable rather than deleted, because for this product the "why" is the
+          product: that anyone may release, that approve waives the window, that a released
+          milestone has not paid anybody yet. Losing those would make the UI quieter and the
+          argument weaker. `<details>` costs no JavaScript and no state.
+        */}
         {hint && phase !== 'success' && phase !== 'error' ? (
-          <p className="text-[#a1a1aa]">{hint}</p>
+          <details className="group">
+            <summary className="inline-flex min-h-11 cursor-pointer items-center text-[#a1a1aa] hover:text-zinc-200">
+              Why?
+            </summary>
+            <p className="pb-1 text-[#a1a1aa]">{hint}</p>
+          </details>
         ) : null}
       </div>
     </div>
