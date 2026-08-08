@@ -3,7 +3,9 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Providers } from './providers'
 import { Dock } from '@/components/Dock'
+import { AssistantButton } from '@/components/AssistantButton'
 import { ChatSheet } from '@/components/ChatSheet'
+import { DevTools } from '@/components/DevTools'
 import { hasFactory } from '@/lib/chain'
 
 /**
@@ -109,13 +111,32 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Dock />
 
           {/*
-            The other half of the dock's centre slot. `Dock` fires `monescrow:open-chat` and
-            `ChatSheet` listens for it, but nothing had ever mounted the listener — so the
-            assistant button did nothing at all, while both components' own tests passed
-            because each half was correct in isolation. Mounted here rather than per page so
-            the assistant is reachable from every screen, which is what a dock slot promises.
+            The assistant, in two halves that have to be mounted together.
+
+            `AssistantButton` fires `monescrow:open-chat`; `ChatSheet` listens for it. Each half
+            is useless alone, and this has already gone wrong twice — first the listener was not
+            mounted anywhere, then the dock's centre slot became a link and the phone lost the
+            button while the desktop bar kept one, so nothing looked broken from a laptop. Both
+            halves live here, at the root, so the assistant is reachable from *every* screen. It
+            is deliberately not gated on being on a job page: with no escrow it can still draft a
+            milestone split, and a door that is only sometimes there is the bug above again.
+
+            The button below is the phone placement only (`md:hidden`); on desktop the same
+            component is rendered inline by the top bar inside `Dock`.
           */}
+          <AssistantButton />
           <ChatSheet />
+
+          {/*
+            The presenter's autofill panel, latched behind a word so it cannot open by accident
+            mid-demo. It is not privileged and is not gated on an environment flag, because it
+            has nothing to gate: it types into forms the user is already looking at and copies
+            addresses that are already public. It signs nothing, calls no route and touches no
+            server — `components/DevTools.tsx` says so at the top and `lib/devtools.test.ts`
+            checks it. Mounted after the assistant, and at a lower `z-index`, so the assistant
+            always wins a tap near the boundary.
+          */}
+          <DevTools />
 
           {/*
             Padding, not margin: the dock is fixed, so without `pb-dock` the last control on

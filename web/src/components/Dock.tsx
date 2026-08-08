@@ -3,22 +3,32 @@
 /**
  * The five-slot dock.
  *
- * On a phone it is a fixed bottom bar and the third slot — the assistant — is raised, larger
- * and accented, because it is the thing the demo is about. On `md:` and up the same five
- * destinations become a top bar with the wordmark, so nothing is learned twice.
+ * On a phone it is a fixed bottom bar whose third slot — Progress — is raised, larger and
+ * accented, because it is the thing anyone opens this app to check. On `md:` and up the same
+ * five destinations become a top bar with the wordmark, so nothing is learned twice.
  *
- * The chat slot never navigates. It calls `onOpenChat`, and when nobody passed one it fires a
- * `monescrow:open-chat` event on `window` so the assistant sheet can own its own open state
- * without the root layout — a server component — having to hold a callback.
+ * The dock is five destinations and nothing else. It used to own the assistant too, via an
+ * `onOpenChat` prop that fell back to dispatching an event; when the centre slot became a link
+ * that handler stopped being reachable from a phone and the assistant lost its only door while
+ * still *looking* wired up. `AssistantButton` owns that job now, and the desktop slot below is a
+ * placement of it rather than a second copy of the same behaviour.
  */
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode, SVGProps } from 'react'
+import { AssistantButton } from '@/components/AssistantButton'
 import { ConnectButton } from '@/components/ConnectButton'
 
-/** Fired when the dock's centre slot is pressed and no `onOpenChat` was supplied. */
-export const OPEN_CHAT_EVENT = 'monescrow:open-chat'
+/**
+ * Re-exported, not declared here.
+ *
+ * The event belongs next to the only thing that fires it, which is `AssistantButton`. This alias
+ * exists because `ChatSheet` imports the name from this module and that file belongs to someone
+ * else this week — breaking their import to win a tidier line here is not a trade worth making.
+ * Either specifier resolves to the same constant.
+ */
+export { OPEN_CHAT_EVENT } from '@/components/AssistantButton'
 
 type IconProps = SVGProps<SVGSVGElement>
 
@@ -55,16 +65,6 @@ function NewIcon(props: IconProps) {
     <svg {...iconBase} {...props}>
       <path d="M12 5v14" />
       <path d="M5 12h14" />
-    </svg>
-  )
-}
-
-function ChatIcon(props: IconProps) {
-  return (
-    <svg {...iconBase} {...props}>
-      <path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2Z" />
-      <path d="M8.5 10.5h7" />
-      <path d="M8.5 13.5h4" />
     </svg>
   )
 }
@@ -138,23 +138,8 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export type DockProps = {
-  /** Called instead of navigating when the centre slot is pressed. */
-  onOpenChat?: () => void
-}
-
-export function Dock({ onOpenChat }: DockProps) {
+export function Dock() {
   const pathname = usePathname() ?? '/'
-
-  const openChat = () => {
-    if (onOpenChat) {
-      onOpenChat()
-      return
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT))
-    }
-  }
 
   return (
     <>
@@ -219,16 +204,13 @@ export function Dock({ onOpenChat }: DockProps) {
                 <BarSlot key={d.href} destination={d} active={isActive(pathname, d.href)} />
               ))}
 
-              <li>
-                <button
-                  type="button"
-                  onClick={openChat}
-                  aria-haspopup="dialog"
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-medium text-white transition-colors hover:bg-accent/90"
-                >
-                  <ChatIcon className="size-5" />
-                  Chat
-                </button>
+              {/*
+                The assistant sits mid-nav on desktop, where the raised centre slot used to put
+                it on a phone. This header is already `hidden md:block`, so this placement needs
+                no breakpoint of its own — the phone gets the floating one from the layout.
+              */}
+              <li className="px-1">
+                <AssistantButton placement="bar" />
               </li>
 
               {RIGHT.map((d) => (

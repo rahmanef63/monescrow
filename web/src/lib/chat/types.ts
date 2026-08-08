@@ -100,7 +100,41 @@ export type InfoCard = {
   lines: { label: string; value: string }[]
 }
 
-export type Card = ActionCard | InfoCard
+/**
+ * A job the assistant has drafted from a brief. **Inert, like every other card.**
+ *
+ * Creating an escrow costs money and needs a signature, so it cannot be something the
+ * assistant does — only something it proposes. The card carries the draft and a button that
+ * opens `/new` with the fields filled in, where the human edits every amount and every
+ * criterion and funds it themselves. Same rule as `ActionCard`: the assistant can put a button
+ * in front of somebody, it cannot press it.
+ */
+export type DraftCard = {
+  kind: 'draft'
+  title: string
+  /** wei, decimal string. Advisory — `/new` re-checks the sum before anything is signed. */
+  totalAmount: string
+  milestones: { title: string; amount: string; check: CheckKind; rationale: string }[]
+  /** Where the split came from, so a template split is never mistaken for a considered one. */
+  source: 'llm' | 'template'
+}
+
+/**
+ * The jobs this wallet is party to, so the assistant can answer "what am I working on" before
+ * any escrow has been opened. Read-only, and derived from the chain rather than a database.
+ */
+export type JobsCard = {
+  kind: 'jobs'
+  jobs: {
+    escrow: `0x${string}`
+    title: string
+    role: Role
+    milestones: number
+    totalAmount: string
+  }[]
+}
+
+export type Card = ActionCard | InfoCard | DraftCard | JobsCard
 
 /** The read tools. Each answers from chain state; none of them writes. */
 export type ReadToolName = 'get_job' | 'get_milestone' | 'list_available_actions'
@@ -108,7 +142,18 @@ export type ReadToolName = 'get_job' | 'get_milestone' | 'list_available_actions
 /** The only tool that produces a button, and it produces a *description* of one. */
 export type ProposeToolName = 'propose_action'
 
-export type ToolName = ReadToolName | ProposeToolName
+/**
+ * The one tool that exists when **no escrow is selected**.
+ *
+ * It produces a `DraftCard` — a suggested split and a link to the form — and it is the entire
+ * tool surface of that mode. There is deliberately no `propose_action` there: a card that
+ * carries a chain call needs a role, a milestone state and a permission verdict, and with no
+ * escrow to read there is none of that. So global mode cannot emit a signing action at all,
+ * and it cannot do so for a structural reason rather than a prompted one.
+ */
+export type DraftToolName = 'draft_job'
+
+export type ToolName = ReadToolName | ProposeToolName | DraftToolName
 
 /**
  * What the assistant is told about the milestone. Note there is no field carrying free text

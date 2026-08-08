@@ -37,7 +37,7 @@
  */
 
 import Link from 'next/link'
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useConnection } from 'wagmi'
 import { escrowFactoryAbi } from '@/lib/abis'
 import { FACTORY_ADDRESS, VERIFIER_ADDRESS, hasFactory, monadTestnet, sameAddress, shortAddress } from '@/lib/chain'
@@ -47,6 +47,7 @@ import type { MilestoneDraft } from '@/lib/ai/types'
 import type { CheckKind } from '@/lib/verify/types'
 import {
   MilestoneEditor,
+  MAX_MILESTONES,
   blankMilestone,
   draftToEditable,
   parseMon,
@@ -166,6 +167,95 @@ const subscribeNever = () => () => {}
 
 function useClientNow(): number | null {
   return useSyncExternalStore(subscribeNever, readClientNow, () => null)
+}
+
+/* ------------------------------------------------------------------ handover from the chat */
+
+/**
+ * The query parameter the assistant's draft card links through. Kept in step with `ChatSheet`,
+ * which builds the link; the two are a pair and neither is useful alone.
+ */
+const DRAFT_PARAM = 'draft'
+
+/** wei as a decimal string: digits only, no sign, no exponent. */
+const WEI_DECIMAL = /^\d+$/
+
+export type HandedDraft = {
+  title: string
+  /** MON, as the text the total field holds. */
+  total: string
+  source: 'llm' | 'template'
+  milestones: EditableMilestone[]
+}
+
+/**
+ * A draft handed over from the assistant, or null.
+ *
+ * The assistant proposes and a human presses, and this is the seam where that happens: what
+ * arrives is a *form*, filled in, with every field editable and the create button still behind
+ * the same two explicit steps as always. Nothing here can create, fund or sign anything, and a
+ * draft that arrives mangled is dropped in favour of the empty form somebody would have got
+ * anyway — a half-filled one is worse than a blank one, because a blank one gets filled in and
+ * a half-filled one gets signed.
+ *
+ * Validated field by field rather than cast. `card.milestones.map` on something that is not an
+ * array is a blank page, and a `BigInt('')` mid-render is the same. The URL is attacker-supplied
+ * in the ordinary sense — anybody can send anybody a link — so the only thing it is allowed to
+ * do is pre-type into a form the person then reads.
+ */
+export function readHandedDraft(search: string): HandedDraft | null {
+  const raw = new URLSearchParams(search).get(DRAFT_PARAM)
+  if (!raw) return null
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+
+  const card = parsed as {
+    kind?: unknown
+    title?: unknown
+    totalAmount?: unknown
+    milestones?: unknown
+    source?: unknown
+  }
+  if (card.kind !== 'draft') return null
+  if (typeof card.title !== 'string' || card.title.trim() === '') return null
+  if (typeof card.totalAmount !== 'string' || !WEI_DECIMAL.test(card.totalAmount)) return null
+  if (!Array.isArray(card.milestones) || card.milestones.length === 0) return null
+  if (card.milestones.length > MAX_MILESTONES) return null
+
+  const milestones: EditableMilestone[] = []
+  for (const entry of card.milestones) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const m = entry as { title?: unknown; amount?: unknown; check?: unknown; rationale?: unknown }
+    if (typeof m.title !== 'string' || typeof m.amount !== 'string') return null
+    if (!WEI_DECIMAL.test(m.amount)) return null
+    if (m.check !== 'http' && m.check !== 'github' && m.check !== 'clientApproval') return null
+    const check: CheckKind = m.check
+    milestones.push(
+      draftToEditable({
+        title: m.title,
+        amount: m.amount,
+        check,
+        // The card carries no criteria — it is a summary of a split, not a signed document. The
+        // editor fills the check-specific block with its own blanks, which is the right shape
+        // for a form: a visible empty URL gets filled in, a plausible guessed one gets signed.
+        criteria: { v: 1, title: m.title, check },
+        rationale: typeof m.rationale === 'string' ? m.rationale : '',
+      }),
+    )
+  }
+
+  return {
+    title: card.title,
+    total: weiToMon(BigInt(card.totalAmount)),
+    source: card.source === 'llm' ? 'llm' : 'template',
+    milestones,
+  }
 }
 
 /** Narrow the milestones endpoint's 200 body without trusting it and without `any`. */

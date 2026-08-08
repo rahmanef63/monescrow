@@ -20,6 +20,11 @@
  * somebody how the escrow works; a button that quietly is not there teaches them nothing and
  * leaves them wondering whether the app is broken.
  *
+ * A `DraftCard` is the same rule applied to the one thing the assistant most obviously cannot do.
+ * Creating an escrow costs money and needs a signature, so a draft renders as a read-only split
+ * and a link that opens `/new` with the fields filled in — the human edits it there and funds it
+ * themselves. A `JobsCard` is a list of links and nothing else.
+ *
  * An enabled card renders a real `TxButton`, which is the same simulate -> estimate gas -> show
  * the cost -> explicit click -> send with an explicit gas limit flow as every other write in the
  * app. There is no second path, and the assistant is not on this one: it put the button there,
@@ -36,13 +41,16 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useConnection } from 'wagmi'
 import { OPEN_CHAT_EVENT } from '@/components/Dock'
+import { Group, GroupNote, Row } from '@/components/ios'
 import { TxButton } from '@/components/TxButton'
-import { shortAddress } from '@/lib/chain'
+import { formatMon, shortAddress } from '@/lib/chain'
 import type { TxRequest } from '@/lib/useTxFlow'
-import type { ActionCard, Card, ChainAction, InfoCard, Role } from '@/lib/chat/types'
+import type { ActionCard, Card, ChainAction, DraftCard, InfoCard, JobsCard, Role } from '@/lib/chat/types'
+import type { CheckKind } from '@/lib/verify/types'
 
 /* ------------------------------------------------------------------ wire shapes */
 
@@ -67,6 +75,73 @@ function nextEntryId(): string {
   return `e${entrySeq}`
 }
 
+function isAddressString(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && ADDRESS_RE.test(value)
+}
+
+function isRole(value: unknown): value is Role {
+  return value === 'client' || value === 'freelancer' || value === 'arbiter' || value === 'stranger'
+}
+
+function isCheckKind(value: unknown): value is CheckKind {
+  return value === 'http' || value === 'github' || value === 'clientApproval'
+}
+
+/**
+ * A draft, field by field.
+ *
+ * Checked properly rather than cast, because unlike an `ActionCard` — whose whole body is fed
+ * to `TxButton`, which simulates before it will do anything — a draft is *rendered*, and
+ * `card.milestones.map` on something that is not an array is a blank sheet with a stack trace
+ * behind it. A malformed draft is dropped and the prose above it still stands.
+ */
+function readDraftCard(value: object): DraftCard | null {
+  const c = value as { title?: unknown; totalAmount?: unknown; milestones?: unknown; source?: unknown }
+  if (typeof c.title !== 'string' || typeof c.totalAmount !== 'string') return null
+  if (c.source !== 'llm' && c.source !== 'template') return null
+  if (!Array.isArray(c.milestones)) return null
+
+  const milestones: DraftCard['milestones'] = []
+  for (const entry of c.milestones) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const m = entry as { title?: unknown; amount?: unknown; check?: unknown; rationale?: unknown }
+    if (typeof m.title !== 'string' || typeof m.amount !== 'string') return null
+    if (!isCheckKind(m.check) || typeof m.rationale !== 'string') return null
+    milestones.push({ title: m.title, amount: m.amount, check: m.check, rationale: m.rationale })
+  }
+
+  return { kind: 'draft', title: c.title, totalAmount: c.totalAmount, milestones, source: c.source }
+}
+
+function readJobsCard(value: object): JobsCard | null {
+  const c = value as { jobs?: unknown }
+  if (!Array.isArray(c.jobs)) return null
+
+  const jobs: JobsCard['jobs'] = []
+  for (const entry of c.jobs) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const j = entry as {
+      escrow?: unknown
+      title?: unknown
+      role?: unknown
+      milestones?: unknown
+      totalAmount?: unknown
+    }
+    if (!isAddressString(j.escrow) || !isRole(j.role)) return null
+    if (typeof j.title !== 'string' || typeof j.totalAmount !== 'string') return null
+    if (typeof j.milestones !== 'number' || !Number.isInteger(j.milestones)) return null
+    jobs.push({
+      escrow: j.escrow,
+      title: j.title,
+      role: j.role,
+      milestones: j.milestones,
+      totalAmount: j.totalAmount,
+    })
+  }
+
+  return { kind: 'jobs', jobs }
+}
+
 /** Narrow the route's 200 body without trusting it and without `any`. */
 function readChatBody(value: unknown): ChatBody | null {
   if (typeof value !== 'object' || value === null) return null
@@ -82,11 +157,26 @@ function readChatBody(value: unknown): ChatBody | null {
     messages.push({ role: m.role, content: m.content })
   }
 
+  // Still the only place a card is ever constructed on this side: `body.cards`, by `kind`.
+  // Two more kinds are recognised than were before; there is no second source and the prose
+  // in `body.messages` is not looked at.
   const cards: Card[] = []
   for (const entry of body.cards) {
     if (typeof entry !== 'object' || entry === null) continue
     const c = entry as { kind?: unknown }
-    if (c.kind === 'action' || c.kind === 'info') cards.push(entry as Card)
+    if (c.kind === 'action' || c.kind === 'info') {
+      cards.push(entry as Card)
+      continue
+    }
+    if (c.kind === 'draft') {
+      const draft = readDraftCard(entry)
+      if (draft) cards.push(draft)
+      continue
+    }
+    if (c.kind === 'jobs') {
+      const jobs = readJobsCard(entry)
+      if (jobs) cards.push(jobs)
+    }
   }
 
   return { messages, cards, source: body.source }
@@ -188,6 +278,43 @@ const ROLE_LABEL: Record<Role, string> = {
   stranger: 'not a party',
 }
 
+const CHECK_LABEL: Record<CheckKind, string> = {
+  clientApproval: 'client approval',
+  http: 'automated HTTP check',
+  github: 'automated GitHub check',
+}
+
+/**
+ * wei -> "1.5 MON", or a visible refusal.
+ *
+ * Amounts arrive as decimal strings and `BigInt` throws on anything that is not one, which in
+ * the middle of a render is a blank sheet. A string that is not a whole number of wei is a bug
+ * worth showing rather than crashing over — and worth *not* silently rendering as 0.
+ */
+function monLabel(wei: string): string {
+  return /^\d+$/.test(wei) ? `${formatMon(wei)} MON` : 'unreadable amount'
+}
+
+/**
+ * How a draft gets to `/new`: one query parameter carrying the card as JSON.
+ *
+ * A query param rather than `sessionStorage` because a URL is stateless — it survives a
+ * reload, a back/forward and being opened in a new tab, and there is no write-then-navigate
+ * ordering to get wrong. `/new` parses it if it can and ignores it if it cannot, so the worst
+ * case is the empty form somebody would have got anyway, never a half-filled one.
+ *
+ * A draft long enough to threaten a URL length limit is left behind deliberately, and the card
+ * says so out loud, because a truncated `draft=` is exactly the broken form this avoids.
+ */
+const DRAFT_PARAM = 'draft'
+
+const MAX_DRAFT_URL = 4000
+
+function draftHref(card: DraftCard): string | null {
+  const encoded = encodeURIComponent(JSON.stringify(card))
+  return encoded.length > MAX_DRAFT_URL ? null : `/new?${DRAFT_PARAM}=${encoded}`
+}
+
 /* ------------------------------------------------------------------ classes */
 
 const FIELD =
@@ -198,6 +325,10 @@ const QUIET =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-800 ' +
   'bg-zinc-950 px-3 text-sm font-medium text-zinc-100 transition-colors hover:border-zinc-700 ' +
   'disabled:cursor-not-allowed disabled:opacity-50'
+
+const PRIMARY =
+  'inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-accent px-4 ' +
+  'text-[17px] font-semibold text-zinc-950 transition-colors hover:bg-accent/90'
 
 /* ================================================================== the sheet */
 
@@ -323,7 +454,7 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
 
   const send = useCallback(async () => {
     const text = draft.trim()
-    if (text === '' || sending || target === null) return
+    if (text === '' || sending) return
 
     const outgoing: ChatMessage[] = [
       ...history.map((e) => ({ role: e.role, content: e.content })),
@@ -348,7 +479,11 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
           ...(key ? { 'x-llm-key': key } : {}),
         },
         body: JSON.stringify({
-          escrow: target,
+          // Omitted, not null, when there is no escrow. The route reads that as global mode:
+          // no chain read, no action proposer, and an assistant that says what it cannot see
+          // instead of describing a job nobody named. Sending a placeholder address here would
+          // be the opposite — a plausible-looking escrow it would go and read.
+          ...(target ? { escrow: target } : {}),
           // Claimed, not authenticated — and safe only because nothing behind this route
           // writes. With no wallet connected the zero address is honest: the assistant answers
           // as a stranger to this escrow, which is exactly what an unconnected reader is.
@@ -447,7 +582,10 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
                     {connection.address ? shortAddress(connection.address) : 'no wallet connected'}
                   </>
                 ) : (
-                  'No escrow chosen yet'
+                  <>
+                    No job selected ·{' '}
+                    {connection.address ? shortAddress(connection.address) : 'no wallet connected'}
+                  </>
                 )}
               </p>
             </div>
@@ -484,8 +622,9 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
                   onChange={(e) => setTypedEscrow(e.target.value)}
                 />
                 <p className="mt-1 text-xs text-zinc-500">
-                  Open a job and this fills itself in. The assistant answers about one escrow at a
-                  time, because every permission question depends on which one.
+                  Optional. Open a job and this fills itself in. Without one the assistant can
+                  explain how MonEscrow works and draft a job for you, but it reads no chain
+                  state at all and will say so rather than guess.
                 </p>
               </div>
             ) : null}
@@ -503,7 +642,7 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
 
             {sending ? (
               <p className="text-sm text-zinc-500" aria-live="polite">
-                Reading the chain…
+                {target ? 'Reading the chain…' : 'Thinking…'}
               </p>
             ) : null}
 
@@ -524,7 +663,7 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
         <div className="shrink-0 border-t border-zinc-800 bg-zinc-900 px-3 pt-3 pb-dock md:pb-3">
           <div className="flex items-end gap-2">
             <label className="sr-only" htmlFor={`${uid}-draft`}>
-              Ask the assistant about this escrow
+              {target ? 'Ask the assistant about this escrow' : 'Ask the assistant'}
             </label>
             <textarea
               id={`${uid}-draft`}
@@ -532,8 +671,9 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
               rows={1}
               className={`${FIELD} max-h-32 min-h-11 resize-none py-3`}
               value={draft}
-              placeholder={target ? 'What can I do with milestone 2?' : 'Choose an escrow first'}
-              disabled={target === null}
+              placeholder={
+                target ? 'What can I do with milestone 2?' : 'Help me set up a job for a new site'
+              }
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -545,7 +685,7 @@ function Sheet({ onClose, escrowProp }: { onClose: () => void; escrowProp?: `0x$
             <button
               type="button"
               onClick={() => void send()}
-              disabled={sending || draft.trim() === '' || target === null}
+              disabled={sending || draft.trim() === ''}
               className={
                 'inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent ' +
                 'text-zinc-950 transition-colors hover:bg-accent/90 disabled:bg-zinc-800 ' +
@@ -624,7 +764,10 @@ function Bubble({ role, content }: { role: 'user' | 'assistant'; content: string
 }
 
 function CardView({ card }: { card: Card }) {
-  return card.kind === 'info' ? <InfoCardView card={card} /> : <ActionCardView card={card} />
+  if (card.kind === 'info') return <InfoCardView card={card} />
+  if (card.kind === 'action') return <ActionCardView card={card} />
+  if (card.kind === 'draft') return <DraftCardView card={card} />
+  return <JobsCardView card={card} />
 }
 
 function InfoCardView({ card }: { card: InfoCard }) {
@@ -677,6 +820,144 @@ function ActionCardView({ card }: { card: ActionCard }) {
         {card.action}
         {card.milestone !== undefined ? `(${card.milestone})` : '()'} · {card.escrow}
       </p>
+    </div>
+  )
+}
+
+/** The milestones added up, or null if any one of them is unreadable. */
+function draftSum(card: DraftCard): bigint | null {
+  let sum = 0n
+  for (const m of card.milestones) {
+    if (!/^\d+$/.test(m.amount)) return null
+    sum += BigInt(m.amount)
+  }
+  return sum
+}
+
+/**
+ * A proposed job.
+ *
+ * The one card with a button that is not a transaction, and it is not a transaction on purpose:
+ * creating an escrow costs money and needs a signature, so the assistant hands over a filled-in
+ * form and stops. Every number here is a suggestion the human overwrites in `/new`, and the
+ * escrow does not exist until they fund it themselves.
+ */
+function DraftCardView({ card }: { card: DraftCard }) {
+  const href = draftHref(card)
+  const total = /^\d+$/.test(card.totalAmount) ? BigInt(card.totalAmount) : null
+  const sum = draftSum(card)
+  // Only worth saying when both sides are readable and they disagree — `/new` re-checks this
+  // anyway, but finding out here beats finding out at the disabled create button.
+  const mismatch = total !== null && sum !== null && sum !== total ? monLabel(sum.toString()) : null
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="min-w-0 text-[17px] font-semibold text-zinc-100">{card.title}</h3>
+        <span className="shrink-0 text-[17px] font-semibold text-zinc-100 tabular-nums">
+          {monLabel(card.totalAmount)}
+        </span>
+      </div>
+
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <span className="text-[13px] text-zinc-500">
+          {card.milestones.length} milestone{card.milestones.length === 1 ? '' : 's'} · nothing on
+          chain yet
+        </span>
+        <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[13px] text-zinc-400">
+          {card.source === 'template' ? 'template split' : 'model split'}
+        </span>
+      </div>
+
+      {card.milestones.length === 0 ? (
+        <p className="mt-3 text-[13px] leading-relaxed text-zinc-500">
+          This draft has no milestones in it, so there is nothing to carry over. Add them by hand in
+          New job.
+        </p>
+      ) : (
+        <ol className="mt-3 flex flex-col">
+          {card.milestones.map((m, i) => (
+            <li
+              key={`${i}-${m.title}`}
+              className="border-t border-zinc-800 py-3 first:border-t-0 first:pt-0 last:pb-0"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 text-[17px] text-zinc-100">
+                  {i + 1}. {m.title}
+                </span>
+                <span className="shrink-0 text-[17px] text-zinc-400 tabular-nums">
+                  {monLabel(m.amount)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[13px] text-zinc-500">{CHECK_LABEL[m.check]}</p>
+              {m.rationale ? (
+                <p className="mt-1 text-[13px] leading-relaxed text-zinc-400">{m.rationale}</p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {mismatch ? (
+        <p className="mt-3 text-[13px] leading-relaxed text-warning">
+          These add up to {mismatch}, not the total above. The constructor reverts on any
+          difference, so New job holds the create button until you have squared it.
+        </p>
+      ) : null}
+
+      {href === null ? (
+        <p className="mt-3 text-[13px] leading-relaxed text-zinc-400">
+          This draft is too long to carry in a link, so{' '}
+          <Link href="/new" className="text-accent-soft underline underline-offset-4">
+            New job
+          </Link>{' '}
+          opens empty. The split above stays here to copy from.
+        </p>
+      ) : (
+        <Link href={href} className={`${PRIMARY} mt-3`}>
+          Open in New job
+        </Link>
+      )}
+
+      <p className="mt-2 text-[13px] leading-relaxed text-zinc-500">
+        Advisory only. Every title, amount and check is editable there, and nothing exists on chain
+        until you fund it yourself.{' '}
+        {card.source === 'template'
+          ? 'This split came from the deterministic template — no key, no model, no judgement about the work.'
+          : 'This split came from a model, which did not look at the work and cannot be held to it.'}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Every escrow this wallet is party to. Read-only, and from the chain rather than a database —
+ * there is no account here to have a list attached to it.
+ */
+function JobsCardView({ card }: { card: JobsCard }) {
+  if (card.jobs.length === 0) {
+    return (
+      <p className="text-[17px] leading-relaxed text-zinc-400">
+        This wallet is not a party to any escrow yet — not as a client, a freelancer or an arbiter.
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-2">
+      <Group>
+        {card.jobs.map((job, i) => (
+          <Row
+            key={`${job.escrow}-${i}`}
+            label={job.title}
+            detail={`${ROLE_LABEL[job.role]} · ${job.milestones} milestone${job.milestones === 1 ? '' : 's'}`}
+            value={monLabel(job.totalAmount)}
+            href={`/job/${job.escrow}`}
+            last={i === card.jobs.length - 1}
+          />
+        ))}
+      </Group>
+      <GroupNote>Opening one shows what this wallet can do there, and why not when it cannot.</GroupNote>
     </div>
   )
 }

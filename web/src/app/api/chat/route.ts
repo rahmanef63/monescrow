@@ -11,6 +11,24 @@
  * with an explicit gas limit flow as every other button in the app. The assistant can put a
  * button in front of somebody. It cannot press it.
  *
+ * ## Two modes, and the second one reads nothing
+ *
+ * `escrow` is optional. Sent, the conversation is about that escrow and gets the four tools
+ * above. Absent — the app opened fresh, no job selected — the conversation runs in **global
+ * mode**, and the difference is not a softer prompt, it is a different tool list.
+ *
+ * Global mode reads **no job**: no `readJob`, no role, no permission table, and `propose_action`
+ * is not among the tools. There is nothing to be right or wrong about, so the assistant is told
+ * to say what it cannot see rather than describe a job it has not read. It keeps two tools.
+ * `draft_job` turns a brief into a suggested split and returns a `DraftCard` — a link to `/new`
+ * with the fields filled in, where the human edits every amount and funds it themselves.
+ * `list_my_jobs` asks the factory which escrows name this wallet and returns a `JobsCard` of
+ * headlines and links; it is a question about a wallet rather than about a job, which is why it
+ * can be answered before one is open, and it is capped so an address named in a thousand
+ * escrows cannot turn one chat turn into a thousand reads. The mode that cannot read a job also
+ * cannot offer a chain call, and that is a fact about the tool list rather than a hope about
+ * the model.
+ *
  * Four properties this file exists to hold.
  *
  *  1. **Cards come from tool results, never from prose.** The `cards` array is built by
@@ -69,11 +87,19 @@ import {
 } from '@/lib/ai/anthropic'
 import { LLM_KEY_HEADER, resolveCredential, type EnvLike, type HeadersLike } from '@/lib/ai/provider'
 import type { Credential } from '@/lib/ai/types'
-import { escrowAbi } from '@/lib/abis'
-import { monadTestnet } from '@/lib/chain'
+import { escrowAbi, escrowFactoryAbi } from '@/lib/abis'
+import { FACTORY_ADDRESS, hasFactory, monadTestnet } from '@/lib/chain'
 import { roleOf } from '@/lib/chat/permissions'
-import { TOOL_SCHEMAS, fenceUntrusted, resolveTool } from '@/lib/chat/tools'
-import type { ToolContext, ToolSchema } from '@/lib/chat/tools'
+import {
+  GLOBAL_TOOL_SCHEMAS,
+  MAX_LISTED_JOBS,
+  TOOL_SCHEMAS,
+  fenceUntrusted,
+  hasCard,
+  resolveGlobalTool,
+  resolveTool,
+} from '@/lib/chat/tools'
+import type { GlobalToolContext, JobBrief, ToolContext, ToolResult, ToolSchema } from '@/lib/chat/tools'
 import { MSTATE } from '@/lib/chat/types'
 import type { Card, JobView, MState, MilestoneView, Role } from '@/lib/chat/types'
 import type { CheckKind } from '@/lib/verify/types'
@@ -199,6 +225,15 @@ export type ChatDeps = {
   transport: ChatTransport
   readJob: ToolContext['readJob']
   readOwed?: ToolContext['readOwed']
+  /**
+   * The wallet's job list, for `list_my_jobs`. Forwarded unchanged into both tool contexts, so
+   * the answer to "which jobs am I on" is the same read whether or not one of them is open.
+   * Absent, the tool reports that the list is unavailable — never that there are no jobs.
+   */
+  listEscrows?: ToolContext['listEscrows']
+  readBrief?: ToolContext['readBrief']
+  /** Whether a factory address is configured. Injected so both branches are testable. */
+  hasFactory?: ToolContext['hasFactory']
   /** Unix seconds. Injected so tests never depend on the wall clock. */
   now?: () => number
   maxRounds?: number
@@ -320,10 +355,87 @@ export function buildSystemPrompt(args: {
     'HOW TO WORK',
     '- Read before you propose. list_available_actions gives a verdict and a reason for every ' +
       'action for this wallet in one call.',
+    '- If they ask about a different job, list_my_jobs shows every escrow this wallet is a ' +
+      'party to — titles, roles, totals, nothing more. It is a way to find which job they mean, ' +
+      'not a way to answer a question about one: this conversation can only read the escrow ' +
+      'above, so send them to the other job\'s page rather than guessing at its state.',
     '- Propose only what the person asked about. One button they need beats four they do not.',
     '- Be short and concrete. Amounts are wei; say so, or convert and say you converted.',
     '',
     fenceUntrusted(job),
+  ].join('\n')
+}
+
+/**
+ * Build the system prompt for a session with **no escrow selected**.
+ *
+ * Everything here follows from one fact: this conversation has no job reader. There is no
+ * `readJob` behind it, no role, no permission table and no `propose_action`, so every sentence
+ * about what is happening inside a job would be invention. The prompt therefore spends most of
+ * its length on what the assistant cannot see and on how the person gets it back — open a job,
+ * or paste its address — rather than on how to be helpful without it.
+ *
+ * The one thing it can read is the list of escrows this wallet is named in, and the prompt is
+ * careful about the difference: a row in that list is a title and a role, not a state, and the
+ * factory being unconfigured is not the same fact as the list being empty.
+ *
+ * Exported for the same reason `buildSystemPrompt` is: "it says it cannot see the chain" and
+ * "it never claims to have created anything" are properties worth asserting on directly.
+ */
+export function buildGlobalSystemPrompt(args: { account: `0x${string}` }): string {
+  return [
+    'You are the MonEscrow assistant. MonEscrow is an on-chain escrow for freelance work: a ' +
+      'client funds the whole job up front, it is split into milestones, and each milestone ' +
+      'releases on its own. A checker can attest that a milestone met its criteria — that is a ' +
+      'proposal, not a decision: it opens a challenge window during which the client can ' +
+      'object, and silence releases the money.',
+    '',
+    'WHAT YOU CANNOT SEE RIGHT NOW',
+    '- No escrow is selected in this conversation, so you cannot see inside any job: not a ' +
+      'milestone state, not a balance, not a deadline, not a submission, not whether anything ' +
+      'has been released.',
+    '- So do not describe one. Never say what state a job is in or what has happened to it. If ' +
+      'you are asked, say plainly that you cannot see inside any escrow from here — that is the ' +
+      'true answer and it is more useful than a guess.',
+    '- To look at a specific escrow they open its job page, or paste its address into this ' +
+      'chat. Then you get tools that read it and you can answer from chain facts.',
+    '',
+    'WHAT YOU CAN DO HERE',
+    '- Explain how MonEscrow works: milestones, checks, the challenge window, disputes, the ' +
+      'deadline, who can do what and why.',
+    '- List their jobs. list_my_jobs asks the factory which escrows this wallet is a party to ' +
+      'and returns a card of headlines: a title, the role this wallet holds, a milestone count ' +
+      'and a total. That is all it knows — it is not a view inside any of them, so do not ' +
+      'answer a question about state from it. Use it to find out which job somebody means, ' +
+      `then tell them to open that one. It stops at ${MAX_LISTED_JOBS} jobs and says when it ` +
+      'did; pass that on rather than presenting a cut-off list as the whole of it. If it comes ' +
+      'back saying the factory is not configured, that means nothing was asked — it does NOT ' +
+      'mean they have no jobs, and reporting it that way would send somebody looking for an ' +
+      'escrow that is sitting there perfectly fine.',
+    '- Draft a job. If somebody describes work they want done and says what they are funding, ' +
+      'call draft_job with their brief and their total. It returns a card showing a suggested ' +
+      'split and a link to the new-job form with those fields already filled in.',
+    '',
+    'WHAT DRAFTING IS NOT',
+    '- draft_job creates nothing. It does not sign, it does not send a transaction, it does not ' +
+      'spend money and it does not put anything on chain. It offers a starting point on a form.',
+    '- So never say you have created, funded, posted or set up a job, and never say you will. ' +
+      'The person opens the form, edits every title, every amount and every criterion, and ' +
+      'funds it themselves from their own wallet.',
+    '- The split comes from a deterministic parser, not from your judgement about this ' +
+      'particular job. Do not present it as a considered plan. Say it is a starting point ' +
+      'built from the brief, and that the amounts are theirs to change.',
+    '- Do not invent the total. If they have not said how much they are funding, ask.',
+    '',
+    'THIS SESSION',
+    `- wallet: ${args.account}`,
+    '- There is no role here, because a role only exists relative to an escrow. Do not assign ' +
+      'this wallet one.',
+    '',
+    'HOW TO WORK',
+    '- Be short and concrete. Amounts on the card are wei; say so, or convert and say you ' +
+      'converted.',
+    '- Never guess. If the answer needs chain state, say which page would show it.',
   ].join('\n')
 }
 
@@ -355,31 +467,61 @@ export async function handleChat(
   const resolved = resolveCredential(headers, deps.env)
   if (resolved.source === 'none') return unavailable(NO_CREDENTIAL_MESSAGE)
 
-  // ---- 3. Chain state, once, before the model sees anything ------------------------------
-  // Read here rather than lazily inside the loop because the system prompt needs the job to
+  // ---- 3. The mode: one escrow, or none --------------------------------------------------
+  //
+  // With an escrow: chain state is read once, here, before the model sees anything. Read at
+  // this point rather than lazily inside the loop because the system prompt needs the job to
   // fence its untrusted text, and because a chain that is down should cost one failed read
   // rather than one per tool call.
-  let job: JobView
-  try {
-    job = await deps.readJob(request.escrow)
-  } catch {
-    // The error is discarded unread: it travelled through a stack holding the user's
-    // credential, and some HTTP clients attach the request they just made to their errors.
-    return unavailable(CHAIN_UNAVAILABLE_MESSAGE)
+  //
+  // With no escrow: **no job is read**. There is no address to read one at, so there is no
+  // honest read to make, and the tool list loses the three job readers and the action proposer
+  // along with them. What is left is `draft_job`, which touches no chain at all, and
+  // `list_my_jobs`, which asks the factory which escrows name this wallet — a question about a
+  // wallet rather than about a job, and the only one that can be answered before a job is open.
+  // An assistant that cannot see a job must say so, and the way to guarantee that is to give it
+  // nothing to see rather than a reader pointed at a plausible-looking address.
+  const escrow = request.escrow
+  const jobsReader = {
+    ...(deps.listEscrows ? { listEscrows: deps.listEscrows } : {}),
+    ...(deps.readBrief ? { readBrief: deps.readBrief } : {}),
+    ...(deps.hasFactory ? { hasFactory: deps.hasFactory } : {}),
   }
+  let system: string
+  let tools: readonly ToolSchema[]
+  let runTool: (name: string, input: unknown) => Promise<ToolResult>
 
-  // The session identity. See the header comment: claimed, not authenticated, and safe only
-  // because nothing downstream of it writes.
-  const role = roleOf(request.account, job)
-  const toolContext: ToolContext = {
-    account: request.account,
-    escrow: request.escrow,
-    readJob: deps.readJob,
-    ...(deps.readOwed ? { readOwed: deps.readOwed } : {}),
-    ...(deps.now ? { now: deps.now } : {}),
+  if (escrow === undefined) {
+    const globalContext: GlobalToolContext = { account: request.account, ...jobsReader }
+    system = buildGlobalSystemPrompt({ account: request.account })
+    tools = GLOBAL_TOOL_SCHEMAS
+    runTool = (name, input) => resolveGlobalTool(name, input, globalContext)
+  } else {
+    let job: JobView
+    try {
+      job = await deps.readJob(escrow)
+    } catch {
+      // The error is discarded unread: it travelled through a stack holding the user's
+      // credential, and some HTTP clients attach the request they just made to their errors.
+      return unavailable(CHAIN_UNAVAILABLE_MESSAGE)
+    }
+
+    // The session identity. See the header comment: claimed, not authenticated, and safe only
+    // because nothing downstream of it writes.
+    const role = roleOf(request.account, job)
+    const toolContext: ToolContext = {
+      account: request.account,
+      escrow,
+      readJob: deps.readJob,
+      ...(deps.readOwed ? { readOwed: deps.readOwed } : {}),
+      ...(deps.now ? { now: deps.now } : {}),
+      ...jobsReader,
+    }
+
+    system = buildSystemPrompt({ job, role, account: request.account })
+    tools = TOOL_SCHEMAS
+    runTool = (name, input) => resolveTool(name, input, toolContext)
   }
-
-  const system = buildSystemPrompt({ job, role, account: request.account })
 
   // ---- 4. The tool loop ------------------------------------------------------------------
   const maxRounds = positiveInt(deps.maxRounds, MAX_ROUNDS)
@@ -396,7 +538,7 @@ export async function handleChat(
       reply = await deps.transport({
         system,
         messages: wire,
-        tools: TOOL_SCHEMAS,
+        tools,
         maxTokens: MAX_OUTPUT_TOKENS,
         credential: resolved.credential,
       })
@@ -441,12 +583,12 @@ export async function handleChat(
         continue
       }
 
-      // `resolveTool` never throws: an unknown tool, malformed input, a bad milestone index or
-      // a failing chain read all come back as a readable `ToolError`.
-      const result = await resolveTool(call.name, call.input, toolContext)
+      // Neither resolver ever throws: an unknown tool, malformed input, a bad milestone index
+      // or a failing chain read all come back as a readable `ToolError`.
+      const result = await runTool(call.name, call.input)
 
       // The only place a card is ever created. Nothing reads `text`.
-      if (result.ok && result.tool === 'propose_action') addCard(cards, result.card)
+      if (hasCard(result)) addCard(cards, result.card)
 
       results.push({
         type: 'tool_result',
@@ -506,9 +648,16 @@ function addCard(cards: Card[], card: Card): void {
 }
 
 function cardKey(card: Card): string {
-  return card.kind === 'action'
-    ? `action:${card.action}:${card.milestone ?? '-'}`
-    : `info:${card.title}`
+  switch (card.kind) {
+    case 'action':
+      return `action:${card.action}:${card.milestone ?? '-'}`
+    case 'info':
+      return `info:${card.title}`
+    case 'draft':
+      return `draft:${card.title}:${card.milestones.length}`
+    case 'jobs':
+      return `jobs:${card.jobs.length}`
+  }
 }
 
 /* -------------------------------------------------------------------------------------------
@@ -520,7 +669,15 @@ function cardKey(card: Card): string {
  * ----------------------------------------------------------------------------------------- */
 
 export type ChatRequest = {
-  escrow: `0x${string}`
+  /**
+   * Which escrow this conversation is about, or **absent**.
+   *
+   * Absent is a first-class state, not a degraded one: it is what the app sends when somebody
+   * opens it fresh with no job selected. It puts the handler in global mode, which reads no
+   * chain state and has no action proposer. Requiring an address here meant the assistant was
+   * unusable until a job existed — including for the question "help me create one".
+   */
+  escrow?: `0x${string}`
   account: `0x${string}`
   messages: ChatMessage[]
 }
@@ -536,10 +693,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseBody(body: unknown): Parsed {
   if (!isRecord(body)) return { ok: false, error: 'body must be a JSON object' }
 
-  const escrow = body.escrow
-  if (typeof escrow !== 'string' || !ADDRESS.test(escrow)) {
-    return { ok: false, error: 'escrow must be a 0x-prefixed 20-byte address' }
+  // An absent escrow is global mode, not a malformed request. `null` and `''` count as absent
+  // too: a client holding "no job selected" in a nullable field posts one of those, and turning
+  // that into a 400 is how this endpoint came to be unusable before any job existed. Anything
+  // else claiming to be an escrow must actually be an address — a half-typed one is a mistake
+  // worth reporting, not a silent fall back to answering about nothing in particular.
+  const rawEscrow = body.escrow
+  const escrowAbsent =
+    rawEscrow === undefined ||
+    rawEscrow === null ||
+    (typeof rawEscrow === 'string' && rawEscrow.trim() === '')
+  if (!escrowAbsent && (typeof rawEscrow !== 'string' || !ADDRESS.test(rawEscrow.trim()))) {
+    return {
+      ok: false,
+      error: 'escrow must be a 0x-prefixed 20-byte address, or omitted for a chat with no job selected',
+    }
   }
+  const escrow = escrowAbsent ? undefined : ((rawEscrow as string).trim() as `0x${string}`)
+
   const account = body.account
   if (typeof account !== 'string' || !ADDRESS.test(account)) {
     return { ok: false, error: 'account must be a 0x-prefixed 20-byte address' }
@@ -592,7 +763,14 @@ function parseBody(body: unknown): Parsed {
     return { ok: false, error: 'the last message must be from the user — there is nothing to answer' }
   }
 
-  return { ok: true, value: { escrow: escrow as `0x${string}`, account: account as `0x${string}`, messages } }
+  return {
+    ok: true,
+    value: {
+      ...(escrow === undefined ? {} : { escrow }),
+      account: account as `0x${string}`,
+      messages,
+    },
+  }
 }
 
 /* -------------------------------------------------------------------------------------------
@@ -738,8 +916,16 @@ const ZERO_ACCOUNT = '0x0000000000000000000000000000000000000000' as const
  * Note what `untrusted.notes` is: empty. Evidence notes live off-chain and there is no store
  * wired up yet. When one appears, it attaches here — and it arrives already fenced, because
  * `fenceUntrusted` is the only path from this field to the prompt.
+ *
+ * `listEscrows` and `readBrief` serve `list_my_jobs` and are deliberately *not* built on
+ * `readJob`: a job read is `summary` plus `milestones` plus one `releasableAt` per milestone,
+ * and twenty of those is a hundred round trips to answer a question that shows four fields per
+ * row. `readBrief` asks `summary` and `milestoneCount` and stops there.
  */
-export function createChainReader(): Pick<ChatDeps, 'readJob' | 'readOwed'> {
+export function createChainReader(): Pick<
+  ChatDeps,
+  'readJob' | 'readOwed' | 'listEscrows' | 'readBrief'
+> {
   const client = createPublicClient({ chain: monadTestnet, transport: http() })
   const cache = new Map<string, Promise<{ job: JobView; owed: string }>>()
 
@@ -813,9 +999,58 @@ export function createChainReader(): Pick<ChatDeps, 'readJob' | 'readOwed'> {
     return { job, owed: s.accountOwed.toString() }
   }
 
+  /**
+   * The factory's index of the escrows one address is named in.
+   *
+   * Guarded rather than defaulted: with no factory address configured this throws instead of
+   * answering `[]`, because an empty array here reads as "you have no jobs" and the truth is
+   * "nothing was asked". The tool checks `hasFactory()` first and reports it properly, so this
+   * is the second line of the same defence rather than the one that fires.
+   */
+  const listEscrows = async (account: `0x${string}`): Promise<readonly `0x${string}`[]> => {
+    if (!hasFactory()) throw new Error('no factory address is configured for this deployment')
+    return (await client.readContract({
+      address: FACTORY_ADDRESS as `0x${string}`,
+      abi: escrowFactoryAbi,
+      functionName: 'escrowsOf',
+      args: [account],
+    })) as readonly `0x${string}`[]
+  }
+
+  /** One row of the job list: `summary` for the headline facts, `milestoneCount` for the rest. */
+  const readBrief = async (escrow: `0x${string}`): Promise<JobBrief> => {
+    const [rawSummary, count] = await Promise.all([
+      client.readContract({
+        address: escrow,
+        abi: escrowAbi,
+        functionName: 'summary',
+        // The list is not a balance sheet: it shows no owed amount, so it asks about nobody.
+        args: [ZERO_ACCOUNT],
+      }) as Promise<unknown>,
+      client.readContract({
+        address: escrow,
+        abi: escrowAbi,
+        functionName: 'milestoneCount',
+      }) as Promise<bigint>,
+    ])
+    const s = rawSummary as ChainSummary
+    return {
+      escrow,
+      client: s.client,
+      freelancer: s.freelancer,
+      arbiter: s.arbiter,
+      totalAmount: s.totalAmount.toString(),
+      milestoneCount: Number(count),
+      // Counterparty text. Neutralised by the tool layer before it reaches a card or the model.
+      title: s.title,
+    }
+  }
+
   return {
     readJob: async (escrow) => (await load(escrow, ZERO_ACCOUNT)).job,
     readOwed: async (escrow, account) => (await load(escrow, account)).owed,
+    listEscrows,
+    readBrief,
   }
 }
 
@@ -916,6 +1151,8 @@ export async function POST(request: Request): Promise<Response> {
     transport: createByokChatTransport(modelRef, globalThis.fetch as unknown as LlmFetch),
     readJob: reader.readJob,
     ...(reader.readOwed ? { readOwed: reader.readOwed } : {}),
+    ...(reader.listEscrows ? { listEscrows: reader.listEscrows } : {}),
+    ...(reader.readBrief ? { readBrief: reader.readBrief } : {}),
   })
 
   return json(result.status, result.body)
