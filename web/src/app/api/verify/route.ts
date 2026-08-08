@@ -219,10 +219,16 @@ export async function POST(request: Request): Promise<Response> {
     return json(502, { error: 'the verifier signing key is not available; this is our configuration' })
   }
 
-  const rpcUrl = process.env.MONAD_RPC_URL
-  if (!rpcUrl) {
-    return json(502, { error: 'the verifier has no RPC endpoint configured; this is our configuration' })
-  }
+  // The RPC has a working default and is only ever an override.
+  //
+  // This previously read `MONAD_RPC_URL` alone, a variable that appears in no `.env.example`
+  // and in no document, so a clean clone got an unconditional 502 from the one endpoint the
+  // whole product argument rests on — before any check ran, on the reviewer's machine, with
+  // nothing to indicate what was missing. Monad testnet's RPC is public; requiring anyone to
+  // configure it to see the demo work was the mistake. `MONAD_RPC_URL` still wins when set,
+  // for a self-hoster with a private endpoint.
+  const rpcUrl =
+    process.env.MONAD_RPC_URL || process.env.NEXT_PUBLIC_MONAD_TESTNET_RPC || 'https://testnet-rpc.monad.xyz'
 
   const result = await handleVerify(body, {
     // The global fetch, narrowed to the injectable seam. The cast is over the *response* shape

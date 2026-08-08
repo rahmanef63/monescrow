@@ -43,7 +43,7 @@ import { use, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useConnection, useReadContracts } from 'wagmi'
 import { escrowAbi } from '@/lib/abis'
-import { formatMon, monadTestnet, sameAddress, shortAddress } from '@/lib/chain'
+import { formatDuration, formatMon, monadTestnet, sameAddress, shortAddress } from '@/lib/chain'
 import { permits, roleOf } from '@/lib/chat/permissions'
 import { MSTATE, type ActionContext, type ChainAction, type MState, type Role } from '@/lib/chat/types'
 import type { CheckKind, Criteria, Evidence, Report } from '@/lib/verify/types'
@@ -806,7 +806,7 @@ export default function JobPage({ params }: { params: Promise<{ address: string 
               <div className="flex flex-wrap justify-between gap-x-3">
                 <dt className="text-zinc-400">Challenge window</dt>
                 <dd className="text-zinc-200">
-                  {Math.round(job.challengeWindow / 3600)} hours per milestone
+                  {formatDuration(job.challengeWindow)} per milestone
                 </dd>
               </div>
               <div className="flex flex-wrap justify-between gap-x-3">

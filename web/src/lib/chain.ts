@@ -53,6 +53,35 @@ export const GAS_LIMIT_PADDING_PERCENT = 20n
 export const withGasPadding = (estimate: bigint): bigint =>
   (estimate * (100n + GAS_LIMIT_PADDING_PERCENT)) / 100n
 
+/**
+ * A challenge window in words, at whatever scale it actually is.
+ *
+ * Written because the job page rendered `Math.round(seconds / 3600)` and therefore showed
+ * **"0 hours per milestone"** for the 90-second demo preset — on the header of the screen the
+ * camera sits on for the whole countdown. The contract now allows 60 s to 30 days (D-7), so a
+ * single unit cannot cover the range: the demo runs in seconds and the product default is
+ * days.
+ */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
+
+  if (s < 60) return plural(s, 'second')
+  if (s < 3600) {
+    const m = Math.floor(s / 60)
+    const rest = s % 60
+    return rest ? `${plural(m, 'minute')} ${plural(rest, 'second')}` : plural(m, 'minute')
+  }
+  if (s < 86_400) {
+    const h = Math.floor(s / 3600)
+    const rest = Math.floor((s % 3600) / 60)
+    return rest ? `${plural(h, 'hour')} ${plural(rest, 'minute')}` : plural(h, 'hour')
+  }
+  const d = Math.floor(s / 86_400)
+  const rest = Math.floor((s % 86_400) / 3600)
+  return rest ? `${plural(d, 'day')} ${plural(rest, 'hour')}` : plural(d, 'day')
+}
+
 /** wei -> MON, trimmed, for display only. Never round-trip a displayed value back into a tx. */
 export function formatMon(wei: bigint | string, maxDecimals = 4): string {
   const v = typeof wei === 'string' ? BigInt(wei) : wei
