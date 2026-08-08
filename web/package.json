@@ -9,13 +9,16 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:abi": "node ../scripts/gen-abi.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "viem": "^2.55.11"
+    "viem": "^2.55.11",
+    "wagmi": "^3.7.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
