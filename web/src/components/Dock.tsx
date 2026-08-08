@@ -168,19 +168,30 @@ export function Dock({ onOpenChat }: DockProps) {
             <DockSlot key={d.href} destination={d} active={isActive(pathname, d.href)} />
           ))}
 
+          {/*
+            The centre slot is Progress, not the assistant.
+
+            Studio's direction put the milestone-in-flight here, and it is the right call: the
+            oversized centre control should be the thing somebody opens the app to check, and on
+            this product that is always "where is my money and what happens next". The assistant
+            is useful but it is never the reason anyone opened the app. It stays reachable from
+            the job screen.
+          */}
           <li className="relative">
-            <button
-              type="button"
-              onClick={openChat}
-              aria-haspopup="dialog"
-              aria-label="Open the MonEscrow assistant"
+            <Link
+              href="/progress"
+              aria-label="Progress — the milestone in flight"
               className="group flex h-16 w-full flex-col items-center justify-end gap-1 pb-2 text-[11px] font-medium text-zinc-100"
             >
-              <span className="absolute -top-5 left-1/2 grid size-14 -translate-x-1/2 place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 ring-4 ring-zinc-950 transition-transform group-active:scale-95">
-                <ChatIcon className="size-6" strokeWidth={2} />
+              <span
+                className={`absolute -top-5 left-1/2 grid size-14 -translate-x-1/2 place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 ring-4 ring-zinc-950 transition-transform group-active:scale-95 ${
+                  isActive(pathname, "/progress") ? "ring-accent/40" : ""
+                }`}
+              >
+                <Mark className="size-7" />
               </span>
-              <span>Chat</span>
-            </button>
+              <span className={isActive(pathname, "/progress") ? "text-accent" : undefined}>Progress</span>
+            </Link>
           </li>
 
           {RIGHT.map((d) => (
